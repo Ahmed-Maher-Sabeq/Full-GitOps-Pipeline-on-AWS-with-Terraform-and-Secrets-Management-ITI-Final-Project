@@ -2,301 +2,274 @@
 
 Complete AWS infrastructure with automated CI/CD pipeline using Jenkins and GitOps deployment with ArgoCD.
 
+---
+
+## 🎯 Current Status
+
+**✅ COMPLETED:**
+- Infrastructure deployed (VPC, EKS, RDS, ElastiCache, ECR)
+- Jenkins installed on EKS with IRSA
+- CI Pipeline working (Git → Jenkins → ECR)
+- Docker images building and pushing to ECR
+
+**⏳ NEXT:** ArgoCD setup for GitOps deployment
+
+---
+
 ## 🏗️ Architecture
 
-- **VPC** - 3 public + 3 private subnets across 3 AZs
-- **EKS** - Kubernetes 1.28 cluster with t3.small nodes
-- **RDS** - MySQL database (Multi-AZ)
-- **ElastiCache** - Redis cache
-- **ECR** - Docker image registry
-- **Jenkins** - CI pipeline (builds and pushes to ECR)
-- **ArgoCD** - GitOps deployment (coming soon)
+```
+GitHub → Jenkins (CI) → ECR → ArgoCD (CD) → EKS
+   ↓         ↓            ↓        ↓          ↓
+  Code    Build+Test    Images   GitOps    Deploy
+```
 
-## 🚀 Quick Start
+**Components:** VPC (3 AZs) • EKS (K8s 1.28) • RDS MySQL • ElastiCache Redis • ECR • Jenkins • ArgoCD
 
-### Current Deployment Status ✅
+---
 
-**Infrastructure**: Deployed and Running  
-**Jenkins**: Installed and Configured  
-**Pipeline**: Successfully Built and Pushed to ECR  
-**Latest Image**: `287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:build-6`  
-**Date**: November 7, 2025
+## 🚀 Quick Start (First Time)
 
-### 1. Deploy Infrastructure
+### Prerequisites
+- AWS CLI configured
+- kubectl, Helm 3, Terraform installed
+
+### Deploy Everything
 
 ```bash
+# 1. Deploy infrastructure (15-20 min)
 cd terraform
 export TF_VAR_db_password="YourSecurePassword123!"
 terraform init
 terraform apply -auto-approve
-```
 
-⏱️ Takes ~15-20 minutes
-
-### 2. Configure kubectl
-
-```bash
+# 2. Configure kubectl
 aws eks update-kubeconfig --region us-east-1 --name gitops-eks-cluster
-kubectl get nodes
-```
 
-### 3. Install Jenkins
-
-```bash
+# 3. Install Jenkins (2-3 min)
 helm repo add jenkins https://charts.jenkins.io
 helm repo update
-
 helm install jenkins jenkins/jenkins \
   --namespace jenkins \
   --create-namespace \
-  --values terraform/jenkins-helm-values.yaml \
-  --version 5.7.15
+  --values terraform/jenkins-helm-values.yaml
 
-# Annotate service account with IAM role
 kubectl annotate serviceaccount jenkins -n jenkins \
-  eks.amazonaws.com/role-arn=arn:aws:iam::287043460305:role/aws-gitops-pipeline-dev-jenkins-role
-
-# Restart Jenkins to pick up IAM role
+  eks.amazonaws.com/role-arn=$(cd terraform && terraform output -raw jenkins_role_arn)
 kubectl delete pod jenkins-0 -n jenkins
+kubectl wait --for=condition=ready pod/jenkins-0 -n jenkins --timeout=300s
+
+# 4. Get Jenkins password
+kubectl exec -n jenkins -it svc/jenkins -c jenkins -- \
+  /bin/cat /run/secrets/additional/chart-admin-password
+
+# 5. Access Jenkins (separate terminal)
+kubectl port-forward svc/jenkins 8080:8080 -n jenkins
 ```
 
-⏱️ Takes ~2-3 minutes
+### Create Pipeline
 
-### 4. Access Jenkins
+1. Open **http://localhost:8080** (admin / password from above)
+2. New Item → `nodejs-app-git-pipeline` → Pipeline
+3. Configure:
+   - Definition: **Pipeline script from SCM**
+   - SCM: **Git**
+   - Repository: `https://github.com/YOUR_USERNAME/YOUR_REPO.git`
+   - Branch: `*/main`
+   - Script Path: `nodejs-app/Jenkinsfile`
+4. Save → Build Now
+
+### Verify
 
 ```bash
-# Get password
-kubectl exec --namespace jenkins -it svc/jenkins -c jenkins -- /bin/cat /run/secrets/additional/chart-admin-password
-
-# Port forward
-kubectl --namespace jenkins port-forward svc/jenkins 8080:8080
+aws ecr describe-images --repository-name nodejs-app --region us-east-1
 ```
 
-Open: http://localhost:8080
-- Username: `admin`
-- Password: `pSmbIHLjhDHnms0OkKqJAz`
+---
 
-## 📁 Project Structure
+## ⚡ Quick Resume (After Destroy)
 
-```
-.
-├── terraform/                    # Infrastructure as Code
-│   ├── modules/
-│   │   ├── vpc/                 # VPC and networking
-│   │   ├── eks/                 # EKS cluster + EBS CSI driver
-│   │   ├── rds/                 # MySQL database
-│   │   ├── elasticache/         # Redis cache
-│   │   └── ecr/                 # Container registry
-│   ├── main.tf                  # Main configuration + Jenkins IAM
-│   ├── provider.tf              # AWS provider
-│   ├── variables.tf             # Input variables
-│   ├── outputs.tf               # Output values
-│   ├── terraform.tfvars         # Variable values
-│   └── jenkins-helm-values.yaml # Jenkins Helm configuration
-│
-├── nodejs-app/                   # Sample Node.js application
-│   ├── src/                     # Application code
-│   ├── Dockerfile               # Container image
-│   └── Jenkinsfile              # CI pipeline definition
-│
-├── jenkins/                      # Jenkins documentation
-│   ├── QUICK_START.md           # Pipeline setup guide
-│   └── JENKINS_SUMMARY.md       # Jenkins configuration details
-│
-├── JENKINS_INSTALLATION.md       # This guide
-└── DEPLOYMENT_SUCCESS.md         # Current deployment status
-```
+**Total time: ~20-25 minutes**
 
-## 📋 What Gets Created
-
-### By Terraform (Automated)
-- VPC with subnets, NAT gateway, Internet gateway
-- EKS cluster with node group
-- EBS CSI driver (IAM role + addon)
-- RDS MySQL instance
-- ElastiCache Redis cluster
-- ECR repository
-- **Jenkins IAM role with ECR permissions**
-- All security groups and IAM policies
-
-### By Helm (Manual)
-- Jenkins deployment in Kubernetes
-- Jenkins service account (with IRSA annotation)
-- Jenkins persistent volume (10GB)
-- Jenkins plugins and configuration
-
-## 🔐 Security
-
-- **IRSA** - IAM Roles for Service Accounts (no credentials in pods)
-- **Private Subnets** - EKS nodes, RDS, and Redis in private subnets
-- **Security Groups** - Restricted access between components
-- **Secrets Manager** - Database credentials stored securely
-- **Encrypted Storage** - RDS and EBS volumes encrypted
-
-## 📊 Resources Created
-
-| Component | Count | Type |
-|-----------|-------|------|
-| VPC | 1 | vpc |
-| Subnets | 6 | 3 public + 3 private |
-| EKS Cluster | 1 | Kubernetes 1.28 |
-| EKS Nodes | 2 | t3.small |
-| RDS | 1 | db.t3.micro (Multi-AZ) |
-| Redis | 1 | cache.t3.micro |
-| ECR | 1 | nodejs-app |
-| IAM Roles | 4 | EKS, Nodes, EBS CSI, Jenkins |
-| **Total** | **~50** | |
-
-## 💰 Cost Estimate
-
-Approximate monthly costs (us-east-1):
-
-| Resource | Cost/Month |
-|----------|------------|
-| EKS Cluster | $73 |
-| EC2 Nodes (2x t3.small) | $30 |
-| NAT Gateways (3x) | $100 |
-| RDS (db.t3.micro) | $15 |
-| ElastiCache (cache.t3.micro) | $12 |
-| EBS Volumes | $2 |
-| **Total** | **~$232/month** |
-
-💡 **Save costs**: Run `terraform destroy` when not using!
-
-## 🔄 Daily Workflow
-
-### Start of Day
 ```bash
+# 1. Deploy (15-20 min)
 cd terraform
 export TF_VAR_db_password="YourPassword"
 terraform apply -auto-approve
 
-# Wait ~15 minutes, then:
+# 2. Configure kubectl (30 sec)
 aws eks update-kubeconfig --region us-east-1 --name gitops-eks-cluster
 
+# 3. Install Jenkins (2-3 min)
+helm repo add jenkins https://charts.jenkins.io
+helm repo update
 helm install jenkins jenkins/jenkins \
   --namespace jenkins \
   --create-namespace \
-  --values terraform/jenkins-helm-values.yaml \
-  --version 5.7.15
+  --values terraform/jenkins-helm-values.yaml
+
+kubectl annotate serviceaccount jenkins -n jenkins \
+  eks.amazonaws.com/role-arn=$(cd terraform && terraform output -raw jenkins_role_arn)
+kubectl delete pod jenkins-0 -n jenkins
+kubectl wait --for=condition=ready pod/jenkins-0 -n jenkins --timeout=300s
+
+# 4. Access Jenkins
+kubectl exec -n jenkins -it svc/jenkins -c jenkins -- \
+  /bin/cat /run/secrets/additional/chart-admin-password
+kubectl port-forward svc/jenkins 8080:8080 -n jenkins  # separate terminal
+
+# 5. Recreate pipeline (see above)
 ```
 
-### End of Day
+---
+
+## 🔄 CI Pipeline Details
+
+**Jenkinsfile:** `nodejs-app/Jenkinsfile`
+
+**Stages:**
+1. Checkout from Git
+2. Verify files
+3. Setup ECR auth (IRSA)
+4. Build with Kaniko
+5. Push to ECR (build-X + latest)
+
+**Features:** Git-based • Kaniko (rootless) • IRSA (no credentials) • Multi-tag • K8s agents
+
+**Output:** `287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:build-X`
+
+**Cache Warning:** Non-critical 403 on cache upload - images still build successfully
+
+---
+
+## 🗑️ Cleanup
+
+### Before Destroy
+
 ```bash
+# 1. Remove Jenkins
 helm uninstall jenkins -n jenkins
+kubectl wait --for=delete namespace/jenkins --timeout=120s
+
+# 2. Optional: Delete ECR images
+aws ecr batch-delete-image --repository-name nodejs-app --region us-east-1 \
+  --image-ids "$(aws ecr list-images --repository-name nodejs-app --region us-east-1 --query 'imageIds[*]' --output json)"
+```
+
+### Destroy
+
+```bash
 cd terraform
+export TF_VAR_db_password="YourPassword"
 terraform destroy -auto-approve
 ```
 
-## 📚 Documentation
+**Time:** 10-15 minutes
 
-- **JENKINS_INSTALLATION.md** - Jenkins installation guide (this file)
-- **DEPLOYMENT_SUCCESS.md** - Current deployment status
-- **terraform/QUICK_DEPLOY.md** - Quick reference commands
-- **terraform/EBS_CSI_DRIVER.md** - EBS CSI driver details
-- **jenkins/QUICK_START.md** - Jenkins pipeline setup
-- **jenkins/JENKINS_SUMMARY.md** - Jenkins configuration details
-
-## 🧪 Testing
-
-### Verify Infrastructure
-
-```bash
-# Check Terraform outputs
-cd terraform
-terraform output
-
-# Check EKS
-kubectl get nodes
-kubectl get pods --all-namespaces
-
-# Check EBS CSI driver
-kubectl get pods -n kube-system | grep ebs-csi
-kubectl get csidriver
-
-# Check ECR
-aws ecr describe-repositories --repository-names nodejs-app --region us-east-1
-```
-
-### Verify Jenkins
-
-```bash
-# Check Jenkins pod
-kubectl get pods -n jenkins
-
-# Check service account IRSA
-kubectl get sa jenkins -n jenkins -o yaml | grep role-arn
-
-# Check persistent volume
-kubectl get pvc -n jenkins
-```
+---
 
 ## 🐛 Troubleshooting
 
-### Jenkins pod not starting
-
+### Jenkins pod stuck
 ```bash
 kubectl describe pod jenkins-0 -n jenkins
-kubectl logs jenkins-0 -n jenkins -c init
-```
-
-### PVC stuck in Pending
-
-```bash
 kubectl get pvc -n jenkins
-kubectl describe pvc jenkins -n jenkins
 kubectl get pods -n kube-system | grep ebs-csi
 ```
 
-### Cannot access ECR from Jenkins
-
+### Pipeline fails (ECR 403)
 ```bash
-kubectl get sa jenkins -n jenkins -o yaml
-aws iam get-role --role-name aws-gitops-pipeline-dev-jenkins-role
+kubectl get sa jenkins -n jenkins -o yaml | grep role-arn
+kubectl annotate serviceaccount jenkins -n jenkins \
+  eks.amazonaws.com/role-arn=$(cd terraform && terraform output -raw jenkins_role_arn) --overwrite
+kubectl delete pod jenkins-0 -n jenkins
 ```
+
+### Terraform destroy fails
+```bash
+# VPC dependency: Delete ENIs manually
+aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=<vpc-id>" --region us-east-1
+aws ec2 delete-network-interface --network-interface-id <eni-id> --region us-east-1
+
+# EKS stuck: Delete node group manually
+aws eks delete-nodegroup --cluster-name gitops-eks-cluster --nodegroup-name <name> --region us-east-1
+```
+
+---
+
+## 💰 Cost
+
+**Monthly (running):** ~$237
+- EKS: $73 • Nodes (2x t3.small): $30 • NAT (3x): $100 • RDS: $15 • Redis: $12 • Other: $7
+
+**After destroy:** $0 (ECR images: ~$0.10/GB/month if not deleted)
+
+---
 
 ## 🎯 Next Steps
 
-1. ✅ Infrastructure deployed
-2. ✅ Jenkins installed
-3. ⏳ Create Jenkins pipeline job
-4. ⏳ Test Docker build and ECR push
-5. ⏳ Set up ArgoCD
-6. ⏳ Deploy application to EKS
+Based on `.kiro/specs/aws-gitops-pipeline/tasks.md`:
 
-## 📞 Support
+### Phase 1: CI Pipeline ✅ COMPLETE
+- [x] Terraform infrastructure
+- [x] Jenkins on EKS with IRSA
+- [x] Git-based pipeline with Kaniko
+- [x] Push to ECR
 
-Check the documentation files for detailed guides:
-- Infrastructure issues → `terraform/` docs
-- Jenkins issues → `jenkins/` docs
-- Pipeline issues → `nodejs-app/Jenkinsfile`
+### Phase 2: CD with ArgoCD (Next)
+- [ ] Create Kubernetes manifests repository
+- [ ] Install ArgoCD on EKS
+- [ ] Configure ArgoCD application
+- [ ] Set up automated sync from Git
+- [ ] Deploy nodejs-app to EKS
 
-## 🔗 Current Deployment Details
+### Phase 3: Image Automation
+- [ ] Install Argo Image Updater
+- [ ] Configure ECR monitoring
+- [ ] Enable automatic image updates
+- [ ] Test end-to-end GitOps flow
 
-### Infrastructure
-- **VPC ID**: vpc-0e2d4c5b90f37dcba
-- **EKS Cluster**: gitops-eks-cluster
-- **Cluster Endpoint**: https://F67C3FCBC0FAE1D4EF3E4089267A2AD3.yl4.us-east-1.eks.amazonaws.com
-- **Node Count**: 1 (t3.small)
-- **Region**: us-east-1
+### Phase 4: Secrets Management
+- [ ] Install External Secrets Operator
+- [ ] Create IAM role for ESO
+- [ ] Configure SecretStore for AWS Secrets Manager
+- [ ] Create ExternalSecrets for RDS and Redis
 
-### Databases
-- **RDS Endpoint**: aws-gitops-pipeline-dev-mysql.cyhqco046hhu.us-east-1.rds.amazonaws.com:3306
-- **Database Name**: appdb
-- **Redis Endpoint**: gitops-redis.esvaw6.0001.use1.cache.amazonaws.com:6379
+### Phase 5: Ingress & TLS
+- [ ] Install NGINX Ingress Controller
+- [ ] Install cert-manager
+- [ ] Create Ingress resource
+- [ ] Configure Let's Encrypt TLS
 
-### Container Registry
-- **ECR Repository**: 287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
+---
 
-### Jenkins
-- **Namespace**: jenkins
-- **Status**: Running (2/2 containers)
-- **Version**: 2.528.1 (Latest)
-- **Chart Version**: 5.8.106
-- **IAM Role**: arn:aws:iam::287043460305:role/aws-gitops-pipeline-dev-jenkins-role
-- **Admin Password**: pSmbIHLjhDHnms0OkKqJAz
-- **Plugins**: All latest versions (Kubernetes, Git, Docker Workflow, Pipeline AWS, Amazon ECR)
+## 📋 Quick Commands
 
-### Secrets Manager
-- **RDS Credentials**: arn:aws:secretsmanager:us-east-1:287043460305:secret:aws-gitops-pipeline-dev-rds-credentials-BvJkRq
-- **Redis Credentials**: arn:aws:secretsmanager:us-east-1:287043460305:secret:aws-gitops-pipeline-dev-redis-credentials-LlHdam
+```bash
+# Jenkins password
+kubectl exec -n jenkins -it svc/jenkins -c jenkins -- /bin/cat /run/secrets/additional/chart-admin-password
+
+# Port forward
+kubectl port-forward svc/jenkins 8080:8080 -n jenkins
+
+# Check ECR
+aws ecr describe-images --repository-name nodejs-app --region us-east-1
+
+# Terraform outputs
+cd terraform && terraform output
+```
+
+---
+
+## 🔗 Key Info
+
+- **Region:** us-east-1
+- **Account:** 287043460305
+- **EKS:** gitops-eks-cluster
+- **ECR:** 287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
+- **Jenkins:** http://localhost:8080 (admin)
+
+---
+
+**Last Updated:** November 7, 2025  
+**Status:** CI Working ✅ | Next: ArgoCD Setup
