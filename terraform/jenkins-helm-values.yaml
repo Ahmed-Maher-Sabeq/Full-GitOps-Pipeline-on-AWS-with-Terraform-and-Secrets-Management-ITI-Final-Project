@@ -1,0 +1,89 @@
+controller:
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::287043460305:role/aws-gitops-pipeline-dev-jenkins-role"
+  
+  image:
+    tag: "2.506-jdk17"
+  
+  admin:
+    username: "admin"
+  
+  numExecutors: 0
+  
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  
+  installPlugins:
+    - kubernetes:latest
+    - workflow-aggregator:latest
+    - git:latest
+    - configuration-as-code:latest
+    - docker-workflow:latest
+    - pipeline-aws:latest
+    - amazon-ecr:latest
+    - credentials-binding:latest
+  
+  additionalPlugins:
+    - pipeline-stage-view:latest
+    - timestamper:latest
+    - ws-cleanup:latest
+  
+  JCasC:
+    defaultConfig: true
+    configScripts:
+      welcome-message: |
+        jenkins:
+          systemMessage: "Jenkins configured automatically by Terraform for GitOps Pipeline"
+      security: |
+        security:
+          scriptApproval:
+            approvedSignatures:
+              - "method groovy.lang.GroovyObject invokeMethod java.lang.String java.lang.Object"
+        unclassified:
+          globalLibraries:
+            libraries: []
+  
+  serviceType: ClusterIP
+  
+  ingress:
+    enabled: false
+  
+  persistence:
+    enabled: true
+    storageClass: "gp2"
+    size: "10Gi"
+    accessMode: ReadWriteOnce
+
+agent:
+  enabled: true
+  podName: "jenkins-agent"
+  
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  
+  image:
+    repository: "jenkins/inbound-agent"
+    tag: "latest"
+  
+  volumes:
+    - type: HostPath
+      hostPath: /var/run/docker.sock
+      mountPath: /var/run/docker.sock
+  
+  runAsUser: 0
+  runAsGroup: 0
+
+rbac:
+  create: true
+  readSecrets: true

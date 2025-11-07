@@ -1,0 +1,45 @@
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/conf
+terraform/creds
+terraform/outputs.txt
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+
+# Secrets
+*.pem
+*.key
+credentials
+secrets/
+
+# Documentation (temporary)
+QUICK_START.md
+DEPLOYMENT_COMPLETE.md
+DEPLOYMENT_SUCCESS.md
+TOMORROW_CHECKLIST.md
+TERRAFORM_JENKINS_AUTOMATION.md

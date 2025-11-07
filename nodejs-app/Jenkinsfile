@@ -1,0 +1,156 @@
+pipeline {
+    agent {
+        kubernetes {
+            yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins: agent
+spec:
+  serviceAccountName: jenkins
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:debug
+    command:
+    - sleep
+    args:
+    - "9999999"
+    volumeMounts:
+    - name: kaniko-secret
+      mountPath: /kaniko/.docker
+  - name: aws-cli
+    image: amazon/aws-cli:latest
+    command:
+    - cat
+    tty: true
+    volumeMounts:
+    - name: kaniko-secret
+      mountPath: /kaniko/.docker
+  volumes:
+  - name: kaniko-secret
+    emptyDir: {}
+'''
+        }
+    }
+    
+    environment {
+        AWS_REGION = 'us-east-1'
+        ECR_REPOSITORY_URL = '287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app'
+        IMAGE_TAG = "build-${BUILD_NUMBER}"
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    echo "=== Checking Out Code ==="
+                    echo "Branch: ${env.GIT_BRANCH}"
+                    echo "Commit: ${env.GIT_COMMIT}"
+                }
+                // Code is automatically checked out by Jenkins
+                // when using "Pipeline script from SCM"
+            }
+        }
+        
+        stage('Verify Files') {
+            steps {
+                script {
+                    echo "=== Verifying Project Files ==="
+                    sh '''
+                        echo "Workspace: ${WORKSPACE}"
+                        echo ""
+                        echo "Files in workspace:"
+                        ls -la
+                        echo ""
+                        echo "Source files:"
+                        ls -la src/
+                        echo ""
+                        echo "Dockerfile exists:"
+                        cat Dockerfile
+                    '''
+                }
+            }
+        }
+        
+        stage('Setup ECR Authentication') {
+            steps {
+                container('aws-cli') {
+                    script {
+                        echo "=== Setting up ECR Authentication ==="
+                        
+                        sh '''
+                            mkdir -p /kaniko/.docker
+                            
+                            aws ecr get-login-password --region ${AWS_REGION} > /tmp/ecr-password
+                            
+                            cat > /kaniko/.docker/config.json <<EOF
+{
+  "auths": {
+    "287043460305.dkr.ecr.us-east-1.amazonaws.com": {
+      "auth": "$(echo -n AWS:$(cat /tmp/ecr-password) | base64 -w 0)"
+    }
+  }
+}
+EOF
+                            
+                            rm /tmp/ecr-password
+                        '''
+                        
+                        echo "✅ ECR authentication configured"
+                    }
+                }
+            }
+        }
+        
+        stage('Build and Push Image') {
+            steps {
+                container('kaniko') {
+                    script {
+                        echo "=== Building and Pushing Image with Kaniko ==="
+                        
+                        sh """
+                            /kaniko/executor \
+                              --context=${WORKSPACE} \
+                              --dockerfile=${WORKSPACE}/Dockerfile \
+                              --destination=${ECR_REPOSITORY_URL}:${IMAGE_TAG} \
+                              --destination=${ECR_REPOSITORY_URL}:latest \
+                              --cache=true \
+                              --cache-ttl=24h \
+                              --verbosity=info
+                        """
+                        
+                        echo "✅ Images built and pushed to ECR:"
+                        echo "   - ${ECR_REPOSITORY_URL}:${IMAGE_TAG}"
+                        echo "   - ${ECR_REPOSITORY_URL}:latest"
+                    }
+                }
+            }
+        }
+        
+        stage('Summary') {
+            steps {
+                script {
+                    echo "=== Build Complete ==="
+                    echo "✅ Pipeline executed successfully"
+                    echo ""
+                    echo "📦 Image Details:"
+                    echo "   Repository: ${ECR_REPOSITORY_URL}"
+                    echo "   Tag: ${IMAGE_TAG}"
+                    echo "   Latest: ${ECR_REPOSITORY_URL}:latest"
+                    echo ""
+                    echo "🚀 Image is ready for deployment"
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '✅ Pipeline completed successfully!'
+        }
+        failure {
+            echo '❌ Pipeline failed!'
+        }
+    }
+}
