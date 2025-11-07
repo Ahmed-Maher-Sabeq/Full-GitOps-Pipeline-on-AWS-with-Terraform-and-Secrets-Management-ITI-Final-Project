@@ -63,11 +63,14 @@ spec:
                         echo "Files in workspace:"
                         ls -la
                         echo ""
+                        echo "nodejs-app directory:"
+                        ls -la nodejs-app/
+                        echo ""
                         echo "Source files:"
-                        ls -la src/
+                        ls -la nodejs-app/src/
                         echo ""
                         echo "Dockerfile exists:"
-                        cat Dockerfile
+                        cat nodejs-app/Dockerfile
                     '''
                 }
             }
@@ -111,8 +114,8 @@ EOF
                         
                         sh """
                             /kaniko/executor \
-                              --context=${WORKSPACE} \
-                              --dockerfile=${WORKSPACE}/Dockerfile \
+                              --context=${WORKSPACE}/nodejs-app \
+                              --dockerfile=${WORKSPACE}/nodejs-app/Dockerfile \
                               --destination=${ECR_REPOSITORY_URL}:${IMAGE_TAG} \
                               --destination=${ECR_REPOSITORY_URL}:latest \
                               --cache=true \
