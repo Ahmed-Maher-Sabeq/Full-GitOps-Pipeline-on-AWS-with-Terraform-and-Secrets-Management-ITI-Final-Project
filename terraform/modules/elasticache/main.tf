@@ -60,8 +60,9 @@ resource "aws_elasticache_cluster" "redis" {
 
 # AWS Secrets Manager Secret for Redis
 resource "aws_secretsmanager_secret" "redis" {
-  name        = "${var.project_name}-${var.environment}-redis-credentials"
-  description = "ElastiCache Redis credentials for ${var.project_name}"
+  name                    = "${var.project_name}-${var.environment}-redis-credentials"
+  description             = "ElastiCache Redis credentials for ${var.project_name}"
+  recovery_window_in_days = 0  # Force delete immediately without recovery window
 
   tags = {
     Name = "${var.project_name}-${var.environment}-redis-credentials"

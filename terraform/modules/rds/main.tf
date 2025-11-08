@@ -74,8 +74,9 @@ resource "aws_db_instance" "main" {
 
 # AWS Secrets Manager Secret for RDS
 resource "aws_secretsmanager_secret" "rds" {
-  name        = "${var.project_name}-${var.environment}-rds-credentials"
-  description = "RDS MySQL credentials for ${var.project_name}"
+  name                    = "${var.project_name}-${var.environment}-rds-credentials"
+  description             = "RDS MySQL credentials for ${var.project_name}"
+  recovery_window_in_days = 0  # Force delete immediately without recovery window
 
   tags = {
     Name = "${var.project_name}-${var.environment}-rds-credentials"

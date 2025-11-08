@@ -408,38 +408,60 @@
     - Check ECR for pushed images
     - _Requirements: 3.3, 3.4, 3.5, 3.6, 3.7_
 
-- [ ] 14. Create Kubernetes manifests repository
+- [x] 14. Create Kubernetes manifests repository
+
+
+
+
+
   - [ ] 14.1 Initialize manifests repository
     - Create k8s-manifests Git repository
     - Create directory structure (application/, argocd/)
+
     - _Requirements: 4.7_
   
-  - [ ] 14.2 Create application namespace manifest
+  - [x] 14.2 Create application namespace manifest
+
+
     - Create application/namespace.yaml for app namespace
     - _Requirements: 4.7_
+
+
   
   - [ ] 14.3 Create application service account
     - Create application/serviceaccount.yaml for nodejs-app-sa
     - _Requirements: 4.7_
   
-  - [ ] 14.4 Create application deployment manifest
+  - [x] 14.4 Create application deployment manifest
+
+
     - Create application/deployment.yaml with 3 replicas
+
+
+
     - Configure container image from ECR
     - Add envFrom for rds-secret and redis-secret
     - Configure liveness and readiness probes
     - Set resource requests and limits
+
+
     - _Requirements: 4.7_
   
   - [ ] 14.5 Create application service manifest
     - Create application/service.yaml with ClusterIP type
+
+
     - Expose port 80 targeting container port 3000
     - _Requirements: 4.7_
+
+
 
 - [ ] 15. Install and configure ArgoCD
   - [ ] 15.1 Install ArgoCD via Helm
     - Create argocd namespace
     - Add ArgoCD Helm repository
     - Install ArgoCD using Helm
+
     - _Requirements: 4.1, 4.2_
   
   - [ ] 15.2 Access ArgoCD UI
