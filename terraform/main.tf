@@ -152,3 +152,67 @@ resource "aws_iam_role_policy_attachment" "jenkins_ecr" {
   role       = aws_iam_role.jenkins.name
   policy_arn = aws_iam_policy.jenkins_ecr.arn
 }
+
+# External Secrets Operator IAM Resources
+# IAM Policy for ESO to access Secrets Manager
+resource "aws_iam_policy" "eso_secrets_manager" {
+  name        = "${var.project_name}-${var.environment}-eso-secrets-policy"
+  description = "Policy for External Secrets Operator to access Secrets Manager"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          module.rds.db_secret_arn,
+          module.elasticache.redis_secret_arn
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-eso-secrets-policy"
+  }
+}
+
+# IAM Role for ESO (IRSA)
+resource "aws_iam_role" "eso" {
+  name = "${var.project_name}-${var.environment}-eso-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = module.eks.oidc_provider_arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${replace(module.eks.oidc_provider_arn, "/^(.*provider/)/", "")}:sub" = "system:serviceaccount:nodejs-app:nodejs-app-sa"
+            "${replace(module.eks.oidc_provider_arn, "/^(.*provider/)/", "")}:aud" = "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-eso-role"
+  }
+
+  depends_on = [module.eks]
+}
+
+# Attach Secrets Manager policy to ESO role
+resource "aws_iam_role_policy_attachment" "eso_secrets_manager" {
+  role       = aws_iam_role.eso.name
+  policy_arn = aws_iam_policy.eso_secrets_manager.arn
+}

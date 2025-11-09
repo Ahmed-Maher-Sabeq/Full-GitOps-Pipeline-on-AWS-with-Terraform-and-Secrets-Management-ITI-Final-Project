@@ -439,6 +439,8 @@
 
 
 
+
+
     - Configure container image from ECR
     - Add envFrom for rds-secret and redis-secret
     - Configure liveness and readiness probes
@@ -461,6 +463,7 @@
     - Create argocd namespace
     - Add ArgoCD Helm repository
     - Install ArgoCD using Helm
+
 
     - _Requirements: 4.1, 4.2_
   
@@ -513,44 +516,62 @@
     - Verify ArgoCD synced and deployed new version
     - _Requirements: 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 17. Install and configure External Secrets Operator
-  - [ ] 17.1 Create IAM role for ESO service account
+- [x] 17. Install and configure External Secrets Operator
+
+
+
+  - [x] 17.1 Create IAM role for ESO service account
+
+
     - Create IAM policy with Secrets Manager read permissions (secretsmanager:GetSecretValue, secretsmanager:DescribeSecret)
     - Create IAM role with trust policy for EKS OIDC provider
     - Attach policy to role
     - _Requirements: 6.2_
   
-  - [ ] 17.2 Install External Secrets Operator via Helm
+  - [x] 17.2 Install External Secrets Operator via Helm
+
+
     - Create external-secrets-system namespace
     - Add External Secrets Helm repository
     - Install ESO using Helm
     - _Requirements: 6.1_
   
-  - [ ] 17.3 Create service account with IAM role annotation
+
+  - [x] 17.3 Create service account with IAM role annotation
+
+
     - Create service account in app namespace with IAM role annotation
     - _Requirements: 6.2_
+
   
-  - [ ] 17.4 Create SecretStore resource
+  - [x] 17.4 Create SecretStore resource
+
     - Create application/secretstore.yaml pointing to AWS Secrets Manager
     - Configure AWS region and IRSA authentication
     - Apply SecretStore to app namespace
     - _Requirements: 6.3_
   
-  - [ ] 17.5 Create ExternalSecret for RDS credentials
+  - [x] 17.5 Create ExternalSecret for RDS credentials
+
+
     - Create application/externalsecret-rds.yaml
     - Map RDS secret from Secrets Manager to Kubernetes secret (rds-secret)
     - Map all required keys (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD)
     - Apply ExternalSecret to app namespace
     - _Requirements: 6.6_
   
-  - [ ] 17.6 Create ExternalSecret for Redis credentials
+  - [x] 17.6 Create ExternalSecret for Redis credentials
+
+
     - Create application/externalsecret-redis.yaml
     - Map Redis secret from Secrets Manager to Kubernetes secret (redis-secret)
     - Map all required keys (REDIS_HOST, REDIS_PORT)
     - Apply ExternalSecret to app namespace
     - _Requirements: 6.7_
   
-  - [ ] 17.7 Test External Secrets sync
+  - [x] 17.7 Test External Secrets sync
+
+
     - Verify rds-secret and redis-secret created in app namespace
     - Check secret contents match AWS Secrets Manager
     - Verify application pods can read secrets

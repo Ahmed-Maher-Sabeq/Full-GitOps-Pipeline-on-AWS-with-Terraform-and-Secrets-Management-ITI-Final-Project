@@ -116,3 +116,9 @@ output "ebs_csi_driver_installed" {
   description = "EBS CSI Driver addon version"
   value       = module.eks.ebs_csi_driver_addon_version
 }
+
+# External Secrets Operator Outputs
+output "eso_role_arn" {
+  description = "ARN of the External Secrets Operator IAM role for IRSA"
+  value       = aws_iam_role.eso.arn
+}
