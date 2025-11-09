@@ -93,6 +93,26 @@ resource "aws_eks_cluster" "main" {
 }
 
 
+# Launch Template for EKS Nodes with max-pods configuration
+resource "aws_launch_template" "eks_nodes" {
+  name_prefix = "${var.project_name}-${var.environment}-eks-node-"
+  
+  user_data = base64encode(templatefile("${path.module}/user-data.sh", {
+    cluster_name = var.cluster_name
+  }))
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "${var.project_name}-${var.environment}-eks-node"
+    }
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-eks-launch-template"
+  }
+}
+
 # EKS Node Group
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
@@ -109,6 +129,11 @@ resource "aws_eks_node_group" "main" {
 
   update_config {
     max_unavailable = 1
+  }
+
+  launch_template {
+    id      = aws_launch_template.eks_nodes.id
+    version = "$Latest"
   }
 
   tags = {
