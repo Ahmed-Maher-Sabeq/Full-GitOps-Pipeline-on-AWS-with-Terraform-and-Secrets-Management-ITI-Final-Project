@@ -5,16 +5,25 @@ metadata:
   namespace: argocd
   annotations:
     argocd-image-updater.argoproj.io/image-list: nodejs-app=287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
-    argocd-image-updater.argoproj.io/nodejs-app.update-strategy: latest
+    argocd-image-updater.argoproj.io/nodejs-app.update-strategy: newest-build
+    argocd-image-updater.argoproj.io/nodejs-app.allow-tags: regexp:^build-[0-9]+$
+    argocd-image-updater.argoproj.io/nodejs-app.helm.image-name: image.repository
+    argocd-image-updater.argoproj.io/nodejs-app.helm.image-tag: image.tag
+    argocd-image-updater.argoproj.io/nodejs-app.pull-secret: pullsecret:argocd/ecr-credentials
     argocd-image-updater.argoproj.io/write-back-method: argocd
-    argocd-image-updater.argoproj.io/nodejs-app.allow-tags: regexp:^[0-9a-f]{7}$|^latest$
 spec:
   project: default
   
   source:
     repoURL: https://github.com/Ahmed-Maher-Sabeq/Full-GitOps-Pipeline-on-AWS-with-Terraform-and-Secrets-Management-ITI-Final-Project.git
     targetRevision: main
-    path: k8s/application
+    path: k8s/helm-chart/nodejs-app
+    helm:
+      parameters:
+      - name: image.repository
+        value: 287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
+      - name: image.tag
+        value: latest
   
   destination:
     server: https://kubernetes.default.svc
