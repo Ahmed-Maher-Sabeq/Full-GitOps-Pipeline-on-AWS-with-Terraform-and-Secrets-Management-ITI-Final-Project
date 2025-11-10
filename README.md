@@ -834,28 +834,113 @@ The core GitOps pipeline is complete! Optional improvements:
 
 ## 🗑️ Cleanup
 
-**Delete everything to avoid AWS charges:**
+**⚠️ IMPORTANT: Follow this order to avoid stuck resources!**
 
+The AWS Load Balancer Controller creates security groups and ALBs that aren't managed by Terraform. You must delete them in the correct order.
+
+### Proper Cleanup Order
+
+**Step 1: Delete ArgoCD Application (removes Ingress)**
 ```bash
-# Delete Helm releases
+kubectl delete application nodejs-app -n argocd
+```
+
+**Step 2: Wait for Ingress deletion**
+```bash
+kubectl wait --for=delete ingress/nodejs-app -n nodejs-app --timeout=300s
+```
+
+**Step 3: If Ingress is stuck, force delete it**
+
+PowerShell:
+```powershell
+kubectl patch ingress nodejs-app -n nodejs-app -p '{\"metadata\":{\"finalizers\":[]}}' --type=merge
+kubectl delete ingress nodejs-app -n nodejs-app --force --grace-period=0
+```
+
+Linux/Mac:
+```bash
+kubectl patch ingress nodejs-app -n nodejs-app -p '{"metadata":{"finalizers":[]}}' --type=merge
+kubectl delete ingress nodejs-app -n nodejs-app --force --grace-period=0
+```
+
+**Step 4: Manually delete ALB and target groups (if still exist)**
+
+PowerShell:
+```powershell
+# Delete ALBs
+$ALB_ARN = aws elbv2 describe-load-balancers --region us-east-1 --query 'LoadBalancers[?contains(LoadBalancerName, `k8s-`)].LoadBalancerArn' --output text
+if ($ALB_ARN) { aws elbv2 delete-load-balancer --load-balancer-arn $ALB_ARN }
+
+# Delete target groups
+$TG_ARN = aws elbv2 describe-target-groups --region us-east-1 --query 'TargetGroups[?contains(TargetGroupName, `k8s-`)].TargetGroupArn' --output text
+if ($TG_ARN) { aws elbv2 delete-target-group --target-group-arn $TG_ARN }
+```
+
+Linux/Mac:
+```bash
+# Delete ALBs
+aws elbv2 describe-load-balancers --region us-east-1 --query 'LoadBalancers[?contains(LoadBalancerName, `k8s-`)].LoadBalancerArn' --output text | \
+  xargs -I {} aws elbv2 delete-load-balancer --load-balancer-arn {}
+
+# Delete target groups
+aws elbv2 describe-target-groups --region us-east-1 --query 'TargetGroups[?contains(TargetGroupName, `k8s-`)].TargetGroupArn' --output text | \
+  xargs -I {} aws elbv2 delete-target-group --target-group-arn {}
+```
+
+**Step 5: Wait for ALB deletion (30 seconds)**
+```bash
+# Both platforms
+Start-Sleep -Seconds 30  # PowerShell
+sleep 30                 # Linux/Mac
+```
+
+**Step 6: Delete security groups created by AWS LB Controller**
+
+PowerShell:
+```powershell
+cd terraform
+$VPC_ID = terraform output -raw vpc_id
+cd ..
+$SGs = aws ec2 describe-security-groups --region us-east-1 --filters "Name=vpc-id,Values=$VPC_ID" --query 'SecurityGroups[?contains(GroupName, `k8s-`)].GroupId' --output text
+if ($SGs) {
+    $SGs -split "`t" | ForEach-Object { aws ec2 delete-security-group --group-id $_ }
+}
+```
+
+Linux/Mac:
+```bash
+VPC_ID=$(cd terraform && terraform output -raw vpc_id)
+aws ec2 describe-security-groups --region us-east-1 --filters "Name=vpc-id,Values=$VPC_ID" \
+  --query 'SecurityGroups[?contains(GroupName, `k8s-`)].GroupId' --output text | \
+  xargs -I {} aws ec2 delete-security-group --group-id {}
+```
+
+**Step 7: Uninstall Helm releases**
+```bash
 helm uninstall aws-load-balancer-controller -n kube-system
 helm uninstall jenkins -n jenkins
 helm uninstall argocd -n argocd
 helm uninstall argocd-image-updater -n argocd
 helm uninstall external-secrets -n external-secrets-system
+```
 
-# Delete ArgoCD app (this deletes the Ingress and ALB)
-kubectl delete application nodejs-app -n argocd
-
-# Wait for ALB to be deleted (important!)
-kubectl wait --for=delete ingress/nodejs-app -n nodejs-app --timeout=300s
-
-# Destroy infrastructure
+**Step 8: Finally, destroy Terraform infrastructure**
+```bash
 cd terraform
 terraform destroy -var="db_password=YourPassword" -auto-approve
 ```
 
-**Important:** Wait for the ALB to be fully deleted before running `terraform destroy`, otherwise Terraform may fail to delete VPC resources.
+---
+
+### Why This Order Matters
+
+The AWS Load Balancer Controller creates resources outside Terraform:
+- **ALB** - Application Load Balancer
+- **Target Groups** - For routing traffic
+- **Security Groups** - For ALB and EKS traffic
+
+If you run `terraform destroy` first, the VPC deletion will hang for 15+ minutes waiting for these resources to be cleaned up. Following the proper order ensures a clean, fast deletion (~2-3 minutes).
 
 ---
 
