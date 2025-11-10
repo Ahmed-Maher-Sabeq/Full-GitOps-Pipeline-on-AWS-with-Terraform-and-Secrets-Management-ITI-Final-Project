@@ -29,8 +29,9 @@ app.use('/api', apiRoutes);
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    message: 'Node.js GitOps Application',
-    version: '1.0.0',
+    message: 'Node.js GitOps Application - Image Updater Test',
+    version: '2.0.0',
+    build: 'Testing Argo Image Updater automatic deployment',
     endpoints: {
       health: '/health',
       ready: '/ready',
