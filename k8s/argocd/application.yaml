@@ -3,6 +3,11 @@ kind: Application
 metadata:
   name: nodejs-app
   namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: nodejs-app=287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
+    argocd-image-updater.argoproj.io/nodejs-app.update-strategy: latest
+    argocd-image-updater.argoproj.io/write-back-method: argocd
+    argocd-image-updater.argoproj.io/nodejs-app.allow-tags: regexp:^[0-9a-f]{7}$|^latest$
 spec:
   project: default
   
