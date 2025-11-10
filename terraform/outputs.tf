@@ -128,3 +128,9 @@ output "nodejs_app_secrets_role_arn" {
   description = "ARN of the IAM role for nodejs-app to access Secrets Manager"
   value       = module.eks.nodejs_app_secrets_role_arn
 }
+
+# AWS Load Balancer Controller Outputs
+output "aws_lb_controller_role_arn" {
+  description = "ARN of the AWS Load Balancer Controller IAM role for IRSA"
+  value       = aws_iam_role.aws_load_balancer_controller.arn
+}
