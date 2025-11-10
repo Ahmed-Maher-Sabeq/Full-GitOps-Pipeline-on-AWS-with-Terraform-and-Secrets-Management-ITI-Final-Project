@@ -336,3 +336,62 @@ resource "aws_eks_addon" "ebs_csi_driver" {
     aws_iam_role_policy_attachment.ebs_csi_driver
   ]
 }
+
+
+# IAM Policy for External Secrets Operator to access AWS Secrets Manager
+resource "aws_iam_policy" "external_secrets" {
+  name        = "${var.project_name}-${var.environment}-external-secrets-policy"
+  description = "Policy for External Secrets Operator to access Secrets Manager"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-external-secrets-policy"
+  }
+}
+
+# IAM Role for nodejs-app Service Account to use External Secrets
+resource "aws_iam_role" "nodejs_app_secrets" {
+  name = "nodejs-app-secrets-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.eks.arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:nodejs-app:nodejs-app-sa"
+            "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "nodejs-app-secrets-role"
+  }
+}
+
+# Attach External Secrets policy to nodejs-app role
+resource "aws_iam_role_policy_attachment" "nodejs_app_secrets" {
+  role       = aws_iam_role.nodejs_app_secrets.name
+  policy_arn = aws_iam_policy.external_secrets.arn
+}

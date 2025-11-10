@@ -122,3 +122,9 @@ output "eso_role_arn" {
   description = "ARN of the External Secrets Operator IAM role for IRSA"
   value       = aws_iam_role.eso.arn
 }
+
+# nodejs-app IAM Role ARN
+output "nodejs_app_secrets_role_arn" {
+  description = "ARN of the IAM role for nodejs-app to access Secrets Manager"
+  value       = module.eks.nodejs_app_secrets_role_arn
+}
