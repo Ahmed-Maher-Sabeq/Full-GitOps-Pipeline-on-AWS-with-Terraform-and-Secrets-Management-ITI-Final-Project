@@ -222,6 +222,77 @@ kubectl get externalsecret -n nodejs-app    # Should show Ready: True
 kubectl get secretstore -n nodejs-app       # Should show Ready: True
 ```
 
+### Step 8: Install AWS Load Balancer Controller (3 min)
+
+**Both PowerShell & Linux/Mac:**
+```bash
+# Add EKS Helm repository
+helm repo add eks https://aws.github.io/eks-charts
+helm repo update
+
+# Install AWS Load Balancer Controller
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  -n kube-system \
+  --set clusterName=gitops-eks-cluster \
+  --set serviceAccount.create=true \
+  --set serviceAccount.name=aws-load-balancer-controller
+```
+
+**Annotate service account with IAM role:**
+
+PowerShell:
+```powershell
+cd terraform
+$ROLE_ARN = terraform output -raw aws_lb_controller_role_arn
+cd ..
+kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system `
+  eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+```
+
+Linux/Mac:
+```bash
+ROLE_ARN=$(cd terraform && terraform output -raw aws_lb_controller_role_arn)
+kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system \
+  eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+```
+
+**Restart controller (both platforms):**
+```bash
+kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
+kubectl wait --for=condition=ready pod \
+  -l app.kubernetes.io/name=aws-load-balancer-controller \
+  -n kube-system --timeout=300s
+```
+
+**Verify ALB created:**
+```bash
+# Wait for Ingress to get an address (2-3 min)
+kubectl get ingress -n nodejs-app -w
+```
+
+Press Ctrl+C when you see an ADDRESS like: `k8s-nodejsap-nodejsap-xxxxx.us-east-1.elb.amazonaws.com`
+
+**Get ALB URL:**
+
+PowerShell:
+```powershell
+$ALB_URL = kubectl get ingress nodejs-app -n nodejs-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+Write-Host "Application URL: http://$ALB_URL"
+```
+
+Linux/Mac:
+```bash
+ALB_URL=$(kubectl get ingress nodejs-app -n nodejs-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "Application URL: http://$ALB_URL"
+```
+
+**Test the application:**
+```bash
+curl http://$ALB_URL/health
+```
+
+Open the ALB URL in your browser to access the web UI!
+
 ---
 
 ## 🎉 Test the Pipeline
@@ -555,22 +626,236 @@ kubectl create secret docker-registry ecr-credentials \
 
 ---
 
+## 🔒 Optional: Add HTTPS Support
+
+Currently, the application is accessible via HTTP through the ALB. Here are your options to add HTTPS:
+
+### Option 1: CloudFront + ALB (No Domain Needed) ⭐ Recommended
+
+**Benefits:**
+- ✅ Free HTTPS with AWS-provided domain (`*.cloudfront.net`)
+- ✅ No domain purchase required
+- ✅ CDN benefits (caching, global performance)
+- ✅ DDoS protection (AWS Shield)
+- ✅ No browser warnings
+
+**Architecture:**
+```
+Internet → CloudFront (HTTPS) → ALB (HTTP) → Pods
+           d1234abcd.cloudfront.net
+```
+
+**Implementation Steps:**
+
+1. **Create CloudFront distribution via Terraform:**
+
+Add to `terraform/main.tf`:
+```hcl
+resource "aws_cloudfront_distribution" "main" {
+  origin {
+    domain_name = module.eks.alb_dns_name  # Your ALB DNS
+    origin_id   = "alb"
+    
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+  
+  enabled = true
+  
+  default_cache_behavior {
+    target_origin_id       = "alb"
+    viewer_protocol_policy = "redirect-to-https"
+    
+    allowed_methods = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods  = ["GET", "HEAD"]
+    
+    forwarded_values {
+      query_string = true
+      headers      = ["Host"]
+      cookies {
+        forward = "all"
+      }
+    }
+    
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+  }
+  
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+  
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+  
+  tags = {
+    Name = "${var.project_name}-${var.environment}-cloudfront"
+  }
+}
+
+output "cloudfront_domain" {
+  value = aws_cloudfront_distribution.main.domain_name
+}
+```
+
+2. **Apply Terraform:**
+```bash
+cd terraform
+terraform apply -var="db_password=YourPassword" -auto-approve
+```
+
+3. **Get CloudFront URL:**
+
+PowerShell:
+```powershell
+cd terraform
+$CF_URL = terraform output -raw cloudfront_domain
+Write-Host "HTTPS URL: https://$CF_URL"
+```
+
+Linux/Mac:
+```bash
+CF_URL=$(cd terraform && terraform output -raw cloudfront_domain)
+echo "HTTPS URL: https://$CF_URL"
+```
+
+4. **Access your app with HTTPS:**
+```
+https://d1234abcd.cloudfront.net
+```
+
+**Cost:** ~$0-1/month (Free tier: 1TB data transfer, then $0.085/GB)
+
+---
+
+### Option 2: ACM Certificate with Your Domain
+
+**Requirements:**
+- Own a domain name (e.g., `myapp.com`)
+
+**Benefits:**
+- ✅ Branded domain
+- ✅ Professional appearance
+- ✅ Free SSL certificate from ACM
+
+**Implementation Steps:**
+
+1. **Request ACM certificate:**
+```bash
+aws acm request-certificate \
+  --domain-name myapp.com \
+  --validation-method DNS \
+  --region us-east-1
+```
+
+2. **Validate domain ownership:**
+- Add DNS records shown in ACM console
+- Wait for validation (5-30 minutes)
+
+3. **Update Ingress with certificate ARN:**
+
+Edit `k8s/helm-chart/nodejs-app/values.yaml`:
+```yaml
+ingress:
+  enabled: true
+  scheme: internet-facing
+  targetType: ip
+  certificateArn: "arn:aws:acm:us-east-1:123456789:certificate/abc-123"
+```
+
+4. **Commit and push:**
+```bash
+git add k8s/helm-chart/nodejs-app/values.yaml
+git commit -m "Add HTTPS with ACM certificate"
+git push
+```
+
+5. **Create Route 53 record:**
+```bash
+# Get ALB DNS
+ALB_DNS=$(kubectl get ingress nodejs-app -n nodejs-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+# Create A record (ALIAS) in Route 53 pointing myapp.com to $ALB_DNS
+```
+
+6. **Access your app:**
+```
+https://myapp.com
+```
+
+**Cost:** ~$0.50/month (Route 53 hosted zone) + domain cost (~$10-15/year)
+
+---
+
+### Option 3: Self-Signed Certificate (Not Recommended)
+
+**Only for testing/development:**
+- ⚠️ Browser shows security warnings
+- ⚠️ Not suitable for production
+- ⚠️ Users must manually accept certificate
+
+---
+
+## 📋 What's Remaining (Optional Enhancements)
+
+The core GitOps pipeline is complete! Optional improvements:
+
+### Completed ✅
+- ✅ Infrastructure (VPC, EKS, RDS, Redis, ECR)
+- ✅ Jenkins CI pipeline with ECR push
+- ✅ ArgoCD CD with GitOps
+- ✅ ArgoCD Image Updater (auto-deployment)
+- ✅ External Secrets Operator (AWS Secrets Manager)
+- ✅ AWS Load Balancer Controller (ALB Ingress)
+- ✅ Modern web UI with task management
+- ✅ Full documentation
+
+### Optional Enhancements 🚀
+- [ ] **HTTPS Support** - Add CloudFront or ACM certificate (see above)
+- [ ] **Monitoring** - Prometheus + Grafana for metrics
+- [ ] **Logging** - ELK Stack or CloudWatch Logs
+- [ ] **Alerting** - AlertManager or SNS notifications
+- [ ] **Backup** - Velero for cluster backups
+- [ ] **Cost Optimization** - Spot instances, autoscaling
+- [ ] **Security Scanning** - Trivy for container scanning
+- [ ] **Multi-Environment** - Dev, Staging, Production
+- [ ] **Custom Domain** - Route 53 + ACM certificate
+- [ ] **WAF** - AWS WAF for security rules
+
+---
+
 ## 🗑️ Cleanup
+
+**Delete everything to avoid AWS charges:**
 
 ```bash
 # Delete Helm releases
+helm uninstall aws-load-balancer-controller -n kube-system
 helm uninstall jenkins -n jenkins
 helm uninstall argocd -n argocd
 helm uninstall argocd-image-updater -n argocd
 helm uninstall external-secrets -n external-secrets-system
 
-# Delete ArgoCD app
+# Delete ArgoCD app (this deletes the Ingress and ALB)
 kubectl delete application nodejs-app -n argocd
+
+# Wait for ALB to be deleted (important!)
+kubectl wait --for=delete ingress/nodejs-app -n nodejs-app --timeout=300s
 
 # Destroy infrastructure
 cd terraform
 terraform destroy -var="db_password=YourPassword" -auto-approve
 ```
+
+**Important:** Wait for the ALB to be fully deleted before running `terraform destroy`, otherwise Terraform may fail to delete VPC resources.
 
 ---
 
@@ -600,11 +885,68 @@ kubectl port-forward -n nodejs-app svc/nodejs-app 8082:80
 curl http://localhost:8082/health
 ```
 
+**Access via ALB:**
+```bash
+# Get ALB URL
+kubectl get ingress nodejs-app -n nodejs-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+# Test
+curl http://$(kubectl get ingress nodejs-app -n nodejs-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/health
+```
+
 ---
 
-## 💰 Cost: ~$175/month | Destroy: $0
+## 💰 Cost Estimate
+
+**Monthly Costs:**
+- EKS Cluster: ~$73/month ($0.10/hour)
+- EC2 Nodes (2x t3.medium): ~$60/month
+- RDS (db.t3.micro): ~$15/month
+- ElastiCache (cache.t3.micro): ~$12/month
+- ALB: ~$16/month
+- NAT Gateway: ~$32/month
+- Data Transfer: ~$5-10/month
+- **Total: ~$213/month**
+
+**Optional Additions:**
+- CloudFront: ~$0-1/month (1TB free tier)
+- Route 53 Hosted Zone: ~$0.50/month
+- Domain: ~$10-15/year
+
+**Destroy everything: $0** ✅
 
 ---
 
-**Last Updated:** November 10, 2025  
-**Status:** ✅ Complete GitOps pipeline working end-to-end
+## 🔄 Restore After Destroy
+
+If you destroy the infrastructure and want to restore it tomorrow:
+
+1. **Deploy infrastructure:**
+```bash
+cd terraform
+terraform apply -var="db_password=YourSecurePassword123!" -auto-approve
+aws eks update-kubeconfig --region us-east-1 --name gitops-eks-cluster
+```
+
+2. **Install all components (in order):**
+```bash
+# Jenkins (Step 2)
+# ArgoCD (Step 4)
+# ArgoCD Image Updater (Step 5)
+# External Secrets Operator (Step 6)
+# Deploy Application (Step 7)
+# AWS Load Balancer Controller (Step 8)
+```
+
+3. **Verify everything:**
+```bash
+kubectl get pods --all-namespaces
+kubectl get ingress -n nodejs-app
+```
+
+**Time to restore:** ~20-25 minutes
+
+---
+
+**Last Updated:** November 11, 2025  
+**Status:** ✅ Complete GitOps pipeline with ALB Ingress working end-to-end
