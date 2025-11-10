@@ -11,6 +11,7 @@ router.get('/health', async (req, res) => {
     
     const health = {
       status: mysqlStatus ? 'healthy' : 'unhealthy',
+      version: 'v2.0-testing-image-updater',
       timestamp: new Date().toISOString(),
       services: {
         mysql: mysqlStatus ? 'connected' : 'disconnected',
