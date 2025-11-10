@@ -39,6 +39,8 @@ readinessProbe:
 serviceAccount:
   create: true
   name: nodejs-app-sa
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::287043460305:role/nodejs-app-secrets-role
 
 secrets:
   rds:
