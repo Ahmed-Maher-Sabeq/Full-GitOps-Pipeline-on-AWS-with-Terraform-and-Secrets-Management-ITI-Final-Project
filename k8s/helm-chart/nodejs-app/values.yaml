@@ -50,11 +50,11 @@ secrets:
   rds:
     enabled: true
     secretName: rds-secret
-    remoteRef: rds-credentials
+    remoteRef: aws-gitops-pipeline-dev-rds-credentials
   redis:
     enabled: true
     secretName: redis-secret
-    remoteRef: redis-credentials
+    remoteRef: aws-gitops-pipeline-dev-redis-credentials
 
 externalSecrets:
   enabled: true
