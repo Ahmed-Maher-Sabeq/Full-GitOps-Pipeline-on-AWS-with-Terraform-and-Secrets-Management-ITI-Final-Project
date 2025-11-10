@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const { testConnection } = require('./config/database');
 const { connectRedis, disconnect: disconnectRedis } = require('./config/redis');
 const { initializeDatabase } = require('./config/init-db');
@@ -11,6 +12,9 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -25,27 +29,6 @@ app.use((req, res, next) => {
 // Routes
 app.use('/', healthRoutes);
 app.use('/api', apiRoutes);
-
-// Root endpoint
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Node.js GitOps Application - Image Updater Test',
-    version: '2.0.0',
-    build: 'Testing Argo Image Updater automatic deployment',
-    endpoints: {
-      health: '/health',
-      ready: '/ready',
-      live: '/live',
-      items: {
-        list: 'GET /api/items',
-        get: 'GET /api/items/:id',
-        create: 'POST /api/items',
-        update: 'PUT /api/items/:id',
-        delete: 'DELETE /api/items/:id'
-      }
-    }
-  });
-});
 
 // 404 handler
 app.use((req, res) => {

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitOps Task Manager</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>🚀 GitOps Task Manager</h1>
+                <p class="subtitle">Powered by AWS EKS, RDS & Redis</p>
+            </div>
+            <div class="status-badges" id="statusBadges">
+                <span class="badge badge-loading">Loading...</span>
+            </div>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">📝</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="totalTasks">0</div>
+                    <div class="stat-label">Total Tasks</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">💾</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="mysqlStatus">-</div>
+                    <div class="stat-label">MySQL (RDS)</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">⚡</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="redisStatus">-</div>
+                    <div class="stat-label">Redis Cache</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🔄</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="appVersion">-</div>
+                    <div class="stat-label">Version</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Task Form -->
+        <div class="card">
+            <h2>➕ Add New Task</h2>
+            <form id="addTaskForm" class="task-form">
+                <div class="form-group">
+                    <input 
+                        type="text" 
+                        id="taskName" 
+                        placeholder="Task name" 
+                        required
+                        maxlength="255"
+                    >
+                </div>
+                <div class="form-group">
+                    <textarea 
+                        id="taskDescription" 
+                        placeholder="Task description (optional)"
+                        rows="3"
+                    ></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <span>Add Task</span>
+                </button>
+            </form>
+        </div>
+
+        <!-- Tasks List -->
+        <div class="card">
+            <div class="card-header">
+                <h2>📋 Tasks</h2>
+                <button class="btn btn-secondary" onclick="refreshTasks()">
+                    <span>🔄 Refresh</span>
+                </button>
+            </div>
+            <div id="tasksList" class="tasks-list">
+                <div class="loading">Loading tasks...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
