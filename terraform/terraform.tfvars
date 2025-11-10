@@ -12,9 +12,9 @@ private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
 cluster_name         = "gitops-eks-cluster"
 cluster_version      = "1.28"
 node_instance_types  = ["t3.small"]
-node_desired_size    = 2
-node_min_size        = 1
-node_max_size        = 4
+node_desired_size    = 3
+node_min_size        = 2
+node_max_size        = 5
 
 # RDS Configuration
 db_name              = "appdb"
