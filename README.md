@@ -52,23 +52,28 @@ helm repo update
 helm install jenkins jenkins/jenkins --namespace jenkins --create-namespace --values terraform/jenkins-helm-values.yaml
 ```
 
+Annotate Jenkins service account with IAM role (for ECR access):
+
 PowerShell:
 ```powershell
 cd terraform; $ROLE_ARN = terraform output -raw jenkins_role_arn; cd ..
 kubectl annotate serviceaccount jenkins -n jenkins eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl delete pod jenkins-0 -n jenkins
+kubectl delete pod jenkins-0 -n jenkins  # Restart to apply IAM role
 ```
 
 Linux/Mac:
 ```bash
 ROLE_ARN=$(cd terraform && terraform output -raw jenkins_role_arn)
 kubectl annotate serviceaccount jenkins -n jenkins eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl delete pod jenkins-0 -n jenkins
+kubectl delete pod jenkins-0 -n jenkins  # Restart to apply IAM role
 ```
 
 Access Jenkins:
 ```bash
+# Get admin password
 kubectl exec -n jenkins -it svc/jenkins -c jenkins -- /bin/cat /run/secrets/additional/chart-admin-password
+
+# Port forward (run in separate terminal)
 kubectl port-forward svc/jenkins 8080:8080 -n jenkins
 ```
 Open http://localhost:8080 (admin / password-from-above)
@@ -85,6 +90,8 @@ helm install argocd argo/argo-cd --namespace argocd --set server.service.type=Cl
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -n argocd --timeout=300s
 ```
 
+Get ArgoCD admin password:
+
 PowerShell:
 ```powershell
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($_)) }
@@ -95,6 +102,7 @@ Linux/Mac:
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
 ```
 
+Port forward (run in separate terminal):
 ```bash
 kubectl port-forward svc/argocd-server -n argocd 8081:443
 ```
@@ -105,6 +113,8 @@ Open https://localhost:8081 (admin / password-from-above)
 ```bash
 helm install argocd-image-updater argo/argocd-image-updater --namespace argocd --set config.argocd.insecure=true --set config.argocd.plaintext=true
 ```
+
+Create ECR credentials secret (for Image Updater to access ECR):
 
 PowerShell:
 ```powershell
@@ -130,8 +140,8 @@ kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=external-secret
 ### Step 6: Deploy Application (2 min)
 
 ```bash
-kubectl apply -f k8s/argocd/application.yaml
-kubectl get application nodejs-app -n argocd -w
+kubectl apply -f k8s/argocd/application.yaml  # Create ArgoCD application
+kubectl get application nodejs-app -n argocd -w  # Watch deployment status
 ```
 Wait for STATUS: Synced, HEALTH: Healthy. Press Ctrl+C.
 
@@ -150,38 +160,42 @@ helm repo update
 helm install aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system --set clusterName=gitops-eks-cluster --set serviceAccount.create=true --set serviceAccount.name=aws-load-balancer-controller
 ```
 
+Annotate service account with IAM role (for ALB management):
+
 PowerShell:
 ```powershell
 cd terraform; $ROLE_ARN = terraform output -raw aws_lb_controller_role_arn; cd ..
 kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
+kubectl rollout restart deployment aws-load-balancer-controller -n kube-system  # Restart to apply IAM role
 ```
 
 Linux/Mac:
 ```bash
 ROLE_ARN=$(cd terraform && terraform output -raw aws_lb_controller_role_arn)
 kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
+kubectl rollout restart deployment aws-load-balancer-controller -n kube-system  # Restart to apply IAM role
 ```
 
-Get ALB URL:
+Wait for ALB creation (2-3 min):
 ```bash
-kubectl get ingress -n nodejs-app -w
+kubectl get ingress -n nodejs-app -w  # Watch for ADDRESS field
 ```
 Wait for ADDRESS. Press Ctrl+C.
+
+Get ALB URL and test:
 
 PowerShell:
 ```powershell
 $ALB_URL = kubectl get ingress nodejs-app -n nodejs-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-Write-Host "http://$ALB_URL"
-curl "http://$ALB_URL/health"
+Write-Host "Application URL: http://$ALB_URL"
+curl "http://$ALB_URL/health"  # Test health endpoint
 ```
 
 Linux/Mac:
 ```bash
 ALB_URL=$(kubectl get ingress nodejs-app -n nodejs-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-echo "http://$ALB_URL"
-curl "http://$ALB_URL/health"
+echo "Application URL: http://$ALB_URL"
+curl "http://$ALB_URL/health"  # Test health endpoint
 ```
 
 ---
@@ -207,14 +221,14 @@ curl -X POST http://localhost:8082/api/items -H "Content-Type: application/json"
 git add nodejs-app/src/routes/health.js
 git commit -m "Test pipeline"
 git push
-kubectl logs -n argocd -l app.kubernetes.io/name=argocd-image-updater -f
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-image-updater -f  # Watch Image Updater detect new image
 ```
 
 **Test Data Persistence:**
 ```bash
-kubectl delete pod -n nodejs-app --all
-kubectl get pods -n nodejs-app -w
-# Refresh web UI - data still there (stored in RDS)
+kubectl delete pod -n nodejs-app --all  # Delete all pods
+kubectl get pods -n nodejs-app -w  # Watch new pods start
+# Refresh web UI - data still there (stored in RDS, not in pods)
 ```
 
 ---
@@ -350,24 +364,26 @@ kubectl patch ingress nodejs-app -n nodejs-app -p '{"metadata":{"finalizers":[]}
 kubectl delete ingress nodejs-app -n nodejs-app --force --grace-period=0
 ```
 
-**Delete ALB & Target Groups:**
+**Delete ALB & Target Groups (created by LB Controller):**
+
 PowerShell:
 ```powershell
 $ALB_ARN = aws elbv2 describe-load-balancers --region us-east-1 --query 'LoadBalancers[?contains(LoadBalancerName, `k8s-`)].LoadBalancerArn' --output text
 if ($ALB_ARN) { aws elbv2 delete-load-balancer --load-balancer-arn $ALB_ARN }
 $TG_ARN = aws elbv2 describe-target-groups --region us-east-1 --query 'TargetGroups[?contains(TargetGroupName, `k8s-`)].TargetGroupArn' --output text
 if ($TG_ARN) { aws elbv2 delete-target-group --target-group-arn $TG_ARN }
-Start-Sleep -Seconds 30
+Start-Sleep -Seconds 30  # Wait for ALB deletion
 ```
 
 Linux/Mac:
 ```bash
 aws elbv2 describe-load-balancers --region us-east-1 --query 'LoadBalancers[?contains(LoadBalancerName, `k8s-`)].LoadBalancerArn' --output text | xargs -I {} aws elbv2 delete-load-balancer --load-balancer-arn {}
 aws elbv2 describe-target-groups --region us-east-1 --query 'TargetGroups[?contains(TargetGroupName, `k8s-`)].TargetGroupArn' --output text | xargs -I {} aws elbv2 delete-target-group --target-group-arn {}
-sleep 30
+sleep 30  # Wait for ALB deletion
 ```
 
-**Delete Security Groups:**
+**Delete Security Groups (created by LB Controller):**
+
 PowerShell:
 ```powershell
 cd terraform; $VPC_ID = terraform output -raw vpc_id; cd ..
