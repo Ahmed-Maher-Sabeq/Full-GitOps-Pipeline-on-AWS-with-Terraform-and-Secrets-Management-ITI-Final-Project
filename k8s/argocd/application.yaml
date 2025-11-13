@@ -12,7 +12,7 @@ metadata:
   namespace: argocd
   annotations:
     argocd-image-updater.argoproj.io/image-list: nodejs-app=287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
-    argocd-image-updater.argoproj.io/nodejs-app.update-strategy: newest-build
+    argocd-image-updater.argoproj.io/nodejs-app.update-strategy: name
     argocd-image-updater.argoproj.io/nodejs-app.allow-tags: regexp:^build-[0-9]+$
     argocd-image-updater.argoproj.io/nodejs-app.helm.image-name: image.repository
     argocd-image-updater.argoproj.io/nodejs-app.helm.image-tag: image.tag
