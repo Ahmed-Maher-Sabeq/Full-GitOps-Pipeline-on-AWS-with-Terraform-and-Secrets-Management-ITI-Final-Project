@@ -39,10 +39,6 @@ Thumbs.db
 credentials
 secrets/
 
-# Generated files (created from templates with dynamic values)
-k8s/argocd/application.yaml
-k8s/helm-chart/nodejs-app/values.yaml
-
 # Documentation (temporary)
 QUICK_START.md
 DEPLOYMENT_COMPLETE.md

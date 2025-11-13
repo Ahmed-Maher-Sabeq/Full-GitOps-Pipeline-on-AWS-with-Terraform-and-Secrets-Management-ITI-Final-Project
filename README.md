@@ -11,8 +11,8 @@ Production-ready GitOps pipeline: Terraform → Jenkins → ECR → ArgoCD Image
 This project is designed to work with **any AWS account**. All AWS account IDs and ECR URLs are configured dynamically during setup:
 
 - **Jenkinsfile**: Automatically detects AWS account ID using IRSA credentials
-- **Helm values**: Generated from `values.yaml.template` with your ECR URL
-- **ArgoCD app**: Generated from `application.yaml.template` with your ECR URL
+- **Helm values**: Updated with your ECR URL using sed/PowerShell commands
+- **ArgoCD app**: Updated with your ECR URL using sed/PowerShell commands
 - **IAM roles**: Annotated via kubectl after Terraform creates them
 
 **No hardcoded AWS account IDs!** Follow the setup instructions below to configure everything automatically.
@@ -174,8 +174,8 @@ kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/ro
 # Update Helm values with ECR repository URL
 (Get-Content k8s/helm-chart/nodejs-app/values.yaml) -replace 'repository: ""', "repository: $ECR_REPO" | Set-Content k8s/helm-chart/nodejs-app/values.yaml
 
-# Create ArgoCD application manifest with correct ECR URL
-(Get-Content k8s/argocd/application.yaml.template) -replace 'ECR_REPOSITORY_URL_PLACEHOLDER', $ECR_REPO | Set-Content k8s/argocd/application.yaml
+# Update ArgoCD application manifest with correct ECR URL
+(Get-Content k8s/argocd/application.yaml) -replace 'REPLACE_WITH_YOUR_ECR_URL', $ECR_REPO | Set-Content k8s/argocd/application.yaml
 ```
 
 Linux/Mac:
@@ -192,8 +192,8 @@ kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/ro
 # Update Helm values with ECR repository URL
 sed -i "s|repository: \"\"|repository: $ECR_REPO|g" k8s/helm-chart/nodejs-app/values.yaml
 
-# Create ArgoCD application manifest with correct ECR URL
-sed "s|ECR_REPOSITORY_URL_PLACEHOLDER|$ECR_REPO|g" k8s/argocd/application.yaml.template > k8s/argocd/application.yaml
+# Update ArgoCD application manifest with correct ECR URL
+sed -i "s|REPLACE_WITH_YOUR_ECR_URL|$ECR_REPO|g" k8s/argocd/application.yaml
 ```
 
 **Deploy ArgoCD Application:**
