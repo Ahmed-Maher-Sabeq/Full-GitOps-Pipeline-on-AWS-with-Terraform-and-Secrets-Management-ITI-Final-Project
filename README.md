@@ -152,8 +152,10 @@ Open https://localhost:8081 (admin / password-from-above)
 
 ### Step 4: Install ArgoCD Image Updater (2 min)
 
+**Important:** Install v0.9.6 (annotation-based version) for simpler configuration:
+
 ```bash
-helm install argocd-image-updater argo/argocd-image-updater --namespace argocd --set config.argocd.insecure=true --set config.argocd.plaintext=true
+helm install argocd-image-updater argo/argocd-image-updater --namespace argocd --version 0.9.6 --set config.argocd.insecure=true --set config.argocd.plaintext=true
 ```
 
 **Create ECR credentials secret (for Image Updater to access ECR):**
@@ -578,5 +580,35 @@ Push → Jenkins → ECR → Image Updater → ArgoCD → EKS → Running!
 
 ---
 
-**Last Updated:** November 11, 2025  
-**Status:** ✅ Complete GitOps pipeline with ALB Ingress
+---
+
+## 📝 Important Notes
+
+### ArgoCD Image Updater Configuration
+
+The Image Updater is configured with annotations on the Application (not separate CRs):
+
+```yaml
+annotations:
+  argocd-image-updater.argoproj.io/image-list: nodejs-app=<ECR_URL>
+  argocd-image-updater.argoproj.io/nodejs-app.update-strategy: name
+  argocd-image-updater.argoproj.io/nodejs-app.allow-tags: regexp:^build-[0-9]+$
+```
+
+**How it works:**
+- Checks ECR every 2 minutes for new images
+- Only considers tags matching `build-[0-9]+` (e.g., build-1, build-2, build-3)
+- Uses `name` strategy to pick the highest build number lexically
+- Automatically updates the Application and ArgoCD syncs the new image
+
+**To test:**
+1. Make a code change
+2. Push to Git and trigger Jenkins build
+3. Jenkins builds and pushes image with tag `build-X`
+4. Within 2 minutes, Image Updater detects and deploys it
+5. Check logs: `kubectl logs -n argocd -l app.kubernetes.io/name=argocd-image-updater --tail=50`
+
+---
+
+**Last Updated:** November 13, 2025  
+**Status:** ✅ Complete GitOps pipeline with Image Updater working
