@@ -1,7 +1,9 @@
 controller:
   serviceAccount:
     annotations:
-      eks.amazonaws.com/role-arn: "arn:aws:iam::287043460305:role/aws-gitops-pipeline-dev-jenkins-role"
+      # Role ARN will be set dynamically via kubectl after Terraform creates the role
+      # See README.md for setup instructions
+      eks.amazonaws.com/role-arn: ""
   
   image:
     tag: "2.506-jdk17"

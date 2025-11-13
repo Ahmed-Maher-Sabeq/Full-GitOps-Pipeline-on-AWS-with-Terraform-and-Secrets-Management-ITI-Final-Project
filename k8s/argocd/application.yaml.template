@@ -1,17 +1,10 @@
-# This file is generated from application.yaml.template during setup
-# DO NOT EDIT MANUALLY - See README.md for setup instructions
-#
-# To regenerate this file:
-# ECR_REPO=$(cd terraform && terraform output -raw ecr_repository_url)
-# sed "s|ECR_REPOSITORY_URL_PLACEHOLDER|$ECR_REPO|g" k8s/argocd/application.yaml.template > k8s/argocd/application.yaml
-
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: nodejs-app
   namespace: argocd
   annotations:
-    argocd-image-updater.argoproj.io/image-list: nodejs-app=REPLACE_WITH_YOUR_ECR_URL
+    argocd-image-updater.argoproj.io/image-list: nodejs-app=ECR_REPOSITORY_URL_PLACEHOLDER
     argocd-image-updater.argoproj.io/nodejs-app.update-strategy: newest-build
     argocd-image-updater.argoproj.io/nodejs-app.allow-tags: regexp:^build-[0-9]+$
     argocd-image-updater.argoproj.io/nodejs-app.helm.image-name: image.repository
@@ -28,7 +21,7 @@ spec:
     helm:
       parameters:
       - name: image.repository
-        value: REPLACE_WITH_YOUR_ECR_URL
+        value: ECR_REPOSITORY_URL_PLACEHOLDER
       - name: image.tag
         value: latest
   

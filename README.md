@@ -6,6 +6,19 @@ Production-ready GitOps pipeline: Terraform → Jenkins → ECR → ArgoCD Image
 
 ---
 
+## ⚠️ Important: Dynamic Configuration
+
+This project is designed to work with **any AWS account**. All AWS account IDs and ECR URLs are configured dynamically during setup:
+
+- **Jenkinsfile**: Automatically detects AWS account ID using IRSA credentials
+- **Helm values**: Generated from `values.yaml.template` with your ECR URL
+- **ArgoCD app**: Generated from `application.yaml.template` with your ECR URL
+- **IAM roles**: Annotated via kubectl after Terraform creates them
+
+**No hardcoded AWS account IDs!** Follow the setup instructions below to configure everything automatically.
+
+---
+
 ## 🎯 What's Included
 
 - Terraform (VPC, EKS, RDS, Redis, ECR, IAM)
@@ -52,7 +65,7 @@ helm repo update
 helm install jenkins jenkins/jenkins --namespace jenkins --create-namespace --values terraform/jenkins-helm-values.yaml
 ```
 
-Annotate Jenkins service account with IAM role (for ECR access):
+**Configure Jenkins IAM Role (for ECR access):**
 
 PowerShell:
 ```powershell
@@ -114,17 +127,21 @@ Open https://localhost:8081 (admin / password-from-above)
 helm install argocd-image-updater argo/argocd-image-updater --namespace argocd --set config.argocd.insecure=true --set config.argocd.plaintext=true
 ```
 
-Create ECR credentials secret (for Image Updater to access ECR):
+**Create ECR credentials secret (for Image Updater to access ECR):**
 
 PowerShell:
 ```powershell
+cd terraform; $ECR_REPO = terraform output -raw ecr_repository_url; cd ..
+$ECR_SERVER = $ECR_REPO -replace '/.*', ''
 $ECR_PASSWORD = aws ecr get-login-password --region us-east-1
-kubectl create secret docker-registry ecr-credentials --docker-server=287043460305.dkr.ecr.us-east-1.amazonaws.com --docker-username=AWS --docker-password=$ECR_PASSWORD -n argocd --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret docker-registry ecr-credentials --docker-server=$ECR_SERVER --docker-username=AWS --docker-password=$ECR_PASSWORD -n argocd --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 Linux/Mac:
 ```bash
-aws ecr get-login-password --region us-east-1 | kubectl create secret docker-registry ecr-credentials --docker-server=287043460305.dkr.ecr.us-east-1.amazonaws.com --docker-username=AWS --docker-password=$(aws ecr get-login-password --region us-east-1) -n argocd --dry-run=client -o yaml | kubectl apply -f -
+ECR_REPO=$(cd terraform && terraform output -raw ecr_repository_url)
+ECR_SERVER=$(echo $ECR_REPO | cut -d'/' -f1)
+aws ecr get-login-password --region us-east-1 | kubectl create secret docker-registry ecr-credentials --docker-server=$ECR_SERVER --docker-username=AWS --docker-password=$(aws ecr get-login-password --region us-east-1) -n argocd --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 ### Step 5: Install External Secrets Operator (2 min)
@@ -137,8 +154,49 @@ helm install external-secrets external-secrets/external-secrets --namespace exte
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=external-secrets -n external-secrets-system --timeout=300s
 ```
 
-### Step 6: Deploy Application (2 min)
+### Step 6: Deploy Application (3 min)
 
+**Configure nodejs-app IAM Role and ECR Repository:**
+
+PowerShell:
+```powershell
+# Get Terraform outputs
+cd terraform
+$ROLE_ARN = terraform output -raw nodejs_app_secrets_role_arn
+$ECR_REPO = terraform output -raw ecr_repository_url
+cd ..
+
+# Set IAM role for External Secrets access
+kubectl create namespace nodejs-app
+kubectl apply -f k8s/helm-chart/nodejs-app/templates/serviceaccount.yaml
+kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+
+# Update Helm values with ECR repository URL
+(Get-Content k8s/helm-chart/nodejs-app/values.yaml) -replace 'repository: ""', "repository: $ECR_REPO" | Set-Content k8s/helm-chart/nodejs-app/values.yaml
+
+# Create ArgoCD application manifest with correct ECR URL
+(Get-Content k8s/argocd/application.yaml.template) -replace 'ECR_REPOSITORY_URL_PLACEHOLDER', $ECR_REPO | Set-Content k8s/argocd/application.yaml
+```
+
+Linux/Mac:
+```bash
+# Get Terraform outputs
+ROLE_ARN=$(cd terraform && terraform output -raw nodejs_app_secrets_role_arn)
+ECR_REPO=$(cd terraform && terraform output -raw ecr_repository_url)
+
+# Set IAM role for External Secrets access
+kubectl create namespace nodejs-app
+kubectl apply -f k8s/helm-chart/nodejs-app/templates/serviceaccount.yaml
+kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+
+# Update Helm values with ECR repository URL
+sed -i "s|repository: \"\"|repository: $ECR_REPO|g" k8s/helm-chart/nodejs-app/values.yaml
+
+# Create ArgoCD application manifest with correct ECR URL
+sed "s|ECR_REPOSITORY_URL_PLACEHOLDER|$ECR_REPO|g" k8s/argocd/application.yaml.template > k8s/argocd/application.yaml
+```
+
+**Deploy ArgoCD Application:**
 ```bash
 kubectl apply -f k8s/argocd/application.yaml  # Create ArgoCD application
 kubectl get application nodejs-app -n argocd -w  # Watch deployment status
@@ -260,13 +318,17 @@ kubectl delete pod -n nodejs-app --all
 **Image Updater Not Working:**
 PowerShell:
 ```powershell
+cd terraform; $ECR_REPO = terraform output -raw ecr_repository_url; cd ..
+$ECR_SERVER = $ECR_REPO -replace '/.*', ''
 $ECR_PASSWORD = aws ecr get-login-password --region us-east-1
-kubectl create secret docker-registry ecr-credentials --docker-server=287043460305.dkr.ecr.us-east-1.amazonaws.com --docker-username=AWS --docker-password=$ECR_PASSWORD -n argocd --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret docker-registry ecr-credentials --docker-server=$ECR_SERVER --docker-username=AWS --docker-password=$ECR_PASSWORD -n argocd --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 Linux/Mac:
 ```bash
-aws ecr get-login-password --region us-east-1 | kubectl create secret docker-registry ecr-credentials --docker-server=287043460305.dkr.ecr.us-east-1.amazonaws.com --docker-username=AWS --docker-password=$(aws ecr get-login-password --region us-east-1) -n argocd --dry-run=client -o yaml | kubectl apply -f -
+ECR_REPO=$(cd terraform && terraform output -raw ecr_repository_url)
+ECR_SERVER=$(echo $ECR_REPO | cut -d'/' -f1)
+aws ecr get-login-password --region us-east-1 | kubectl create secret docker-registry ecr-credentials --docker-server=$ECR_SERVER --docker-username=AWS --docker-password=$(aws ecr get-login-password --region us-east-1) -n argocd --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 ---

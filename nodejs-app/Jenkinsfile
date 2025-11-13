@@ -36,7 +36,9 @@ spec:
     
     environment {
         AWS_REGION = 'us-east-1'
-        ECR_REPOSITORY_URL = '287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app'
+        // Dynamically get AWS Account ID using IRSA credentials
+        AWS_ACCOUNT_ID = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
+        ECR_REPOSITORY_URL = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/nodejs-app"
         IMAGE_TAG = "build-${BUILD_NUMBER}"
     }
     
@@ -85,12 +87,15 @@ spec:
                         sh '''
                             mkdir -p /kaniko/.docker
                             
+                            # Dynamically construct ECR registry URL
+                            ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                            
                             aws ecr get-login-password --region ${AWS_REGION} > /tmp/ecr-password
                             
                             cat > /kaniko/.docker/config.json <<EOF
 {
   "auths": {
-    "287043460305.dkr.ecr.us-east-1.amazonaws.com": {
+    "${ECR_REGISTRY}": {
       "auth": "$(echo -n AWS:$(cat /tmp/ecr-password) | base64 -w 0)"
     }
   }
