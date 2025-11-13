@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nodejs-app
+  namespace: argocd
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/Ahmed-Maher-Sabeq/Full-GitOps-Pipeline-on-AWS-with-Terraform-and-Secrets-Management-ITI-Final-Project.git
+    targetRevision: main
+    path: k8s/helm-chart/nodejs-app
+    helm:
+      parameters:
+      - name: image.repository
+        value: 287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
+      - name: image.tag
+        value: latest
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nodejs-app
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
