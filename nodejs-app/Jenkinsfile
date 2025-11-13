@@ -36,13 +36,28 @@ spec:
     
     environment {
         AWS_REGION = 'us-east-1'
-        // Dynamically get AWS Account ID using IRSA credentials
-        AWS_ACCOUNT_ID = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
-        ECR_REPOSITORY_URL = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/nodejs-app"
         IMAGE_TAG = "build-${BUILD_NUMBER}"
     }
     
     stages {
+        stage('Setup Environment') {
+            steps {
+                container('aws-cli') {
+                    script {
+                        echo "=== Getting AWS Account Information ==="
+                        
+                        // Get AWS Account ID dynamically
+                        env.AWS_ACCOUNT_ID = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
+                        env.ECR_REPOSITORY_URL = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/nodejs-app"
+                        
+                        echo "AWS Account ID: ${env.AWS_ACCOUNT_ID}"
+                        echo "ECR Repository: ${env.ECR_REPOSITORY_URL}"
+                        echo "Image Tag: ${IMAGE_TAG}"
+                    }
+                }
+            }
+        }
+        
         stage('Checkout') {
             steps {
                 script {
@@ -105,7 +120,7 @@ EOF
                             rm /tmp/ecr-password
                         '''
                         
-                        echo "✅ ECR authentication configured"
+                        echo "✅ ECR authentication configured for ${env.ECR_REPOSITORY_URL}"
                     }
                 }
             }
