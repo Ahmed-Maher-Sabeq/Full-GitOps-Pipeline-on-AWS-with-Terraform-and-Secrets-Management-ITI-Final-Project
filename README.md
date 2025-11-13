@@ -19,6 +19,35 @@ This project is designed to work with **any AWS account**. All AWS account IDs a
 
 ---
 
+## 📋 Prerequisites Setup
+
+### 1. Fork This Repository
+
+**Important:** You must fork this repository to your own GitHub account before starting.
+
+1. Click the "Fork" button at the top of this repository
+2. Clone your forked repository:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/YOUR_FORKED_REPO.git
+   cd YOUR_FORKED_REPO
+   ```
+
+### 2. Update Git Repository URL
+
+After forking, update the ArgoCD application to point to your repository:
+
+**Edit `k8s/argocd/application.yaml`:**
+```yaml
+spec:
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/YOUR_FORKED_REPO.git  # Update this line
+    targetRevision: main
+```
+
+**Also update Jenkins pipeline configuration** (Step 2 below) to use your forked repository URL.
+
+---
+
 ## 🎯 What's Included
 
 - Terraform (VPC, EKS, RDS, Redis, ECR, IAM)
@@ -166,16 +195,12 @@ $ROLE_ARN = terraform output -raw nodejs_app_secrets_role_arn
 $ECR_REPO = terraform output -raw ecr_repository_url
 cd ..
 
-# Set IAM role for External Secrets access
-kubectl create namespace nodejs-app
-kubectl apply -f k8s/helm-chart/nodejs-app/templates/serviceaccount.yaml
-kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-
 # Update Helm values with ECR repository URL
 (Get-Content k8s/helm-chart/nodejs-app/values.yaml) -replace 'repository: ""', "repository: $ECR_REPO" | Set-Content k8s/helm-chart/nodejs-app/values.yaml
 
-# Update ArgoCD application manifest with correct ECR URL
+# Update ArgoCD application manifest with correct ECR URL (2 places)
 (Get-Content k8s/argocd/application.yaml) -replace 'REPLACE_WITH_YOUR_ECR_URL', $ECR_REPO | Set-Content k8s/argocd/application.yaml
+(Get-Content k8s/argocd/application.yaml) -replace '287043460305\.dkr\.ecr\.us-east-1\.amazonaws\.com/nodejs-app', $ECR_REPO | Set-Content k8s/argocd/application.yaml
 ```
 
 Linux/Mac:
@@ -184,24 +209,59 @@ Linux/Mac:
 ROLE_ARN=$(cd terraform && terraform output -raw nodejs_app_secrets_role_arn)
 ECR_REPO=$(cd terraform && terraform output -raw ecr_repository_url)
 
-# Set IAM role for External Secrets access
-kubectl create namespace nodejs-app
-kubectl apply -f k8s/helm-chart/nodejs-app/templates/serviceaccount.yaml
-kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-
 # Update Helm values with ECR repository URL
 sed -i "s|repository: \"\"|repository: $ECR_REPO|g" k8s/helm-chart/nodejs-app/values.yaml
 
-# Update ArgoCD application manifest with correct ECR URL
+# Update ArgoCD application manifest with correct ECR URL (2 places)
 sed -i "s|REPLACE_WITH_YOUR_ECR_URL|$ECR_REPO|g" k8s/argocd/application.yaml
+sed -i "s|287043460305\.dkr\.ecr\.us-east-1\.amazonaws\.com/nodejs-app|$ECR_REPO|g" k8s/argocd/application.yaml
 ```
 
 **Deploy ArgoCD Application:**
 ```bash
-kubectl apply -f k8s/argocd/application.yaml  # Create ArgoCD application
-kubectl get application nodejs-app -n argocd -w  # Watch deployment status
+# Deploy the application (namespace will be created automatically)
+kubectl apply -f k8s/argocd/application.yaml
 ```
-Wait for STATUS: Synced, HEALTH: Healthy. Press Ctrl+C.
+
+**Annotate Service Account with IAM Role:**
+
+Wait ~30 seconds for ArgoCD to create the namespace and service account, then annotate it:
+
+PowerShell:
+```powershell
+Start-Sleep -Seconds 30
+kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+kubectl delete pod --all -n nodejs-app
+```
+
+Linux/Mac:
+```bash
+sleep 30
+kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+kubectl delete pod --all -n nodejs-app
+```
+
+**Verify deployment:**
+```bash
+kubectl get application nodejs-app -n argocd  # Should show: Synced, Healthy
+kubectl get pods -n nodejs-app                 # Should show: Running
+```
+
+**Annotate Service Account with IAM Role:**
+
+PowerShell:
+```powershell
+cd terraform; $ROLE_ARN = terraform output -raw nodejs_app_secrets_role_arn; cd ..
+kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+kubectl rollout restart deployment nodejs-app -n nodejs-app
+```
+
+Linux/Mac:
+```bash
+ROLE_ARN=$(cd terraform && terraform output -raw nodejs_app_secrets_role_arn)
+kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+kubectl rollout restart deployment nodejs-app -n nodejs-app
+```
 
 Verify:
 ```bash

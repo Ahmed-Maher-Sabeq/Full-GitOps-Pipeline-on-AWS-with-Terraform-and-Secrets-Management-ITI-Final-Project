@@ -11,7 +11,7 @@ metadata:
   name: nodejs-app
   namespace: argocd
   annotations:
-    argocd-image-updater.argoproj.io/image-list: nodejs-app=REPLACE_WITH_YOUR_ECR_URL
+    argocd-image-updater.argoproj.io/image-list: nodejs-app=287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
     argocd-image-updater.argoproj.io/nodejs-app.update-strategy: newest-build
     argocd-image-updater.argoproj.io/nodejs-app.allow-tags: regexp:^build-[0-9]+$
     argocd-image-updater.argoproj.io/nodejs-app.helm.image-name: image.repository
@@ -28,7 +28,7 @@ spec:
     helm:
       parameters:
       - name: image.repository
-        value: REPLACE_WITH_YOUR_ECR_URL
+        value: 287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
       - name: image.tag
         value: latest
   

@@ -1,7 +1,7 @@
 replicaCount: 3
 
 image:
-  repository: "" # Will be set dynamically - see README.md
+  repository: 287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app # Will be set dynamically - see README.md
   tag: latest
   pullPolicy: Always
 
