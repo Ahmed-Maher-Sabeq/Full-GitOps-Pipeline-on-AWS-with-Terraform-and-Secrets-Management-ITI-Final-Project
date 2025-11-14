@@ -9,8 +9,10 @@ spec:
   
   # Global update settings
   commonUpdateSettings:
-    updateStrategy: name
-    allowTags: "^build-[0-9]+$"
+    updateStrategy: alphabetical
+    ignoreTags:
+      - "latest"
+      - "v*"
   
   # Write-back configuration
   writeBackConfig:

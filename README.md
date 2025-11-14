@@ -1,6 +1,6 @@
 # AWS GitOps Pipeline - CI/CD with Jenkins, ArgoCD & Helm
 
-Production-ready GitOps pipeline: Terraform → Jenkins → ECR → ArgoCD Image Updater → ArgoCD → EKS
+Production-ready GitOps pipeline with ArgoCD Image Updater v1.0.0 (CR-based): Terraform → Jenkins → ECR → ArgoCD Image Updater → ArgoCD → EKS
 
 **Result:** Push code → Auto-deploy in ~5 minutes
 
@@ -8,77 +8,25 @@ Production-ready GitOps pipeline: Terraform → Jenkins → ECR → ArgoCD Image
 
 ## ⚠️ Important: Dynamic Configuration
 
-This project is designed to work with **any AWS account**. All AWS account IDs and ECR URLs are configured dynamically during setup:
-
-- **Jenkinsfile**: Automatically detects AWS account ID using IRSA credentials
-- **Helm values**: Updated with your ECR URL using sed/PowerShell commands
-- **ArgoCD app**: Updated with your ECR URL using sed/PowerShell commands
-- **IAM roles**: Annotated via kubectl after Terraform creates them
+This project is designed to work with **any AWS account**. All AWS account IDs and ECR URLs are configured dynamically during setup.
 
 **No hardcoded AWS account IDs!** Follow the setup instructions below to configure everything automatically.
 
 ---
 
-## 📋 Prerequisites Setup
+## 📋 Prerequisites
 
-### 1. Fork This Repository
-
-**Important:** You must fork this repository to your own GitHub account before starting.
-
-1. Click the "Fork" button at the top of this repository
-2. Clone your forked repository:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/YOUR_FORKED_REPO.git
-   cd YOUR_FORKED_REPO
-   ```
-
-### 2. Update Git Repository URL
-
-After forking, update the ArgoCD application to point to your repository:
-
-**Edit `k8s/argocd/application.yaml`:**
-```yaml
-spec:
-  source:
-    repoURL: https://github.com/YOUR_USERNAME/YOUR_FORKED_REPO.git  # Update this line
-    targetRevision: main
-```
-
-**Also update Jenkins pipeline configuration** (Step 2 below) to use your forked repository URL.
-
----
-
-## 🎯 What's Included
-
-- Terraform (VPC, EKS, RDS, Redis, ECR, IAM)
-- Jenkins CI (build & push to ECR)
-- ArgoCD CD (GitOps deployment)
-- ArgoCD Image Updater (auto-detect new images)
-- External Secrets Operator (AWS Secrets Manager)
-- AWS Load Balancer Controller (ALB Ingress)
-- Modern web UI (task manager with RDS + Redis)
-
----
-
-## 🚀 Quick Start (30 minutes)
-
-### Prerequisites
 - AWS CLI configured
 - kubectl, Helm 3, Terraform installed
+- Fork this repository to your GitHub account
+
+---
+
+## 🚀 Complete Deployment Guide
 
 ### Step 1: Deploy Infrastructure (15 min)
 
-PowerShell:
 ```powershell
-cd terraform
-terraform init
-terraform apply -var="db_password=YourSecurePassword123!" -auto-approve
-aws eks update-kubeconfig --region us-east-1 --name gitops-eks-cluster
-kubectl get nodes
-```
-
-Linux/Mac:
-```bash
 cd terraform
 terraform init
 terraform apply -var="db_password=YourSecurePassword123!" -auto-approve
@@ -88,379 +36,328 @@ kubectl get nodes
 
 ### Step 2: Install Jenkins (3 min)
 
-```bash
+```powershell
 helm repo add jenkins https://charts.jenkins.io
 helm repo update
 helm install jenkins jenkins/jenkins --namespace jenkins --create-namespace --values terraform/jenkins-helm-values.yaml
 ```
 
-**Configure Jenkins IAM Role (for ECR access):**
+**Annotate Jenkins service account with IAM role:**
 
-PowerShell:
 ```powershell
-cd terraform; $ROLE_ARN = terraform output -raw jenkins_role_arn; cd ..
+$ROLE_ARN = (cd terraform; terraform output -raw jenkins_role_arn)
 kubectl annotate serviceaccount jenkins -n jenkins eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl delete pod jenkins-0 -n jenkins  # Restart to apply IAM role
+kubectl delete pod jenkins-0 -n jenkins
 ```
 
-Linux/Mac:
-```bash
-ROLE_ARN=$(cd terraform && terraform output -raw jenkins_role_arn)
-kubectl annotate serviceaccount jenkins -n jenkins eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl delete pod jenkins-0 -n jenkins  # Restart to apply IAM role
-```
+**Access Jenkins:**
 
-Access Jenkins:
-```bash
+```powershell
 # Get admin password
 kubectl exec -n jenkins -it svc/jenkins -c jenkins -- /bin/cat /run/secrets/additional/chart-admin-password
 
 # Port forward (run in separate terminal)
 kubectl port-forward svc/jenkins 8080:8080 -n jenkins
 ```
-Open http://localhost:8080 (admin / password-from-above)
 
-Create pipeline: New Item → `nodejs-app-git-pipeline` → Pipeline → SCM: Git → Repo: `https://github.com/Ahmed-Maher-Sabeq/Full-GitOps-Pipeline-on-AWS-with-Terraform-and-Secrets-Management-ITI-Final-Project.git` → Branch: `*/main` → Script Path: `nodejs-app/Jenkinsfile` → Save → Build Now
+Open http://localhost:8080 and login with admin / password-from-above
+
+**Create Jenkins Pipeline:**
+1. New Item → `nodejs-app-pipeline` → Pipeline
+2. SCM: Git
+3. Repository URL: `https://github.com/YOUR_USERNAME/YOUR_FORKED_REPO.git`
+4. Branch: `*/main`
+5. Script Path: `nodejs-app/Jenkinsfile`
+6. Save → Build Now
 
 ### Step 3: Install ArgoCD (3 min)
 
-```bash
-kubectl create namespace argocd
+```powershell
 helm repo add argo https://argoproj.github.io/argo-helm
 helm repo update
-helm install argocd argo/argo-cd --namespace argocd --set server.service.type=ClusterIP
+helm install argocd argo/argo-cd --namespace argocd --create-namespace --version 7.7.12
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -n argocd --timeout=300s
 ```
 
-Get ArgoCD admin password:
+**Get ArgoCD admin password:**
 
-PowerShell:
 ```powershell
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($_)) }
 ```
 
-Linux/Mac:
-```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
-```
+**Port forward (run in separate terminal):**
 
-Port forward (run in separate terminal):
-```bash
+```powershell
 kubectl port-forward svc/argocd-server -n argocd 8081:443
 ```
+
 Open https://localhost:8081 (admin / password-from-above)
 
-### Step 4: Install ArgoCD Image Updater (2 min)
+### Step 4: Install ArgoCD Image Updater v1.0.0 (2 min)
 
-**Important:** Install v0.9.6 (annotation-based version) for simpler configuration:
+**Install Image Updater with CR-based configuration:**
 
-```bash
-helm install argocd-image-updater argo/argocd-image-updater --namespace argocd --version 0.9.6 --set config.argocd.insecure=true --set config.argocd.plaintext=true
-```
-
-**Create ECR credentials secret (for Image Updater to access ECR):**
-
-PowerShell:
 ```powershell
-cd terraform; $ECR_REPO = terraform output -raw ecr_repository_url; cd ..
-$ECR_SERVER = $ECR_REPO -replace '/.*', ''
-$ECR_PASSWORD = aws ecr get-login-password --region us-east-1
-kubectl create secret docker-registry ecr-credentials --docker-server=$ECR_SERVER --docker-username=AWS --docker-password=$ECR_PASSWORD -n argocd --dry-run=client -o yaml | kubectl apply -f -
+helm install argocd-image-updater argo/argocd-image-updater --namespace argocd --version 1.0.0 -f k8s/argocd/image-updater-values.yaml
 ```
 
-Linux/Mac:
-```bash
-ECR_REPO=$(cd terraform && terraform output -raw ecr_repository_url)
-ECR_SERVER=$(echo $ECR_REPO | cut -d'/' -f1)
-aws ecr get-login-password --region us-east-1 | kubectl create secret docker-registry ecr-credentials --docker-server=$ECR_SERVER --docker-username=AWS --docker-password=$(aws ecr get-login-password --region us-east-1) -n argocd --dry-run=client -o yaml | kubectl apply -f -
+**Annotate service account with IAM role:**
+
+```powershell
+$ROLE_ARN = (cd terraform; terraform output -raw argocd_image_updater_role_arn)
+kubectl annotate serviceaccount argocd-image-updater -n argocd eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+kubectl delete pod -n argocd -l app.kubernetes.io/name=argocd-image-updater
+```
+
+**Apply ImageUpdater Custom Resource:**
+
+```powershell
+kubectl apply -f k8s/argocd/imageupdater-cr.yaml
 ```
 
 ### Step 5: Install External Secrets Operator (2 min)
 
-```bash
-kubectl create namespace external-secrets-system
+```powershell
 helm repo add external-secrets https://charts.external-secrets.io
 helm repo update
-helm install external-secrets external-secrets/external-secrets --namespace external-secrets-system
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=external-secrets -n external-secrets-system --timeout=300s
+helm install external-secrets external-secrets/external-secrets --namespace external-secrets-system --create-namespace
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=external-secrets -n external-secrets-system --timeout=120s
 ```
 
-### Step 6: Deploy Application (3 min)
+### Step 6: Install AWS Load Balancer Controller (3 min)
 
-**Configure nodejs-app IAM Role and ECR Repository:**
-
-PowerShell:
 ```powershell
-# Get Terraform outputs
-cd terraform
-$ROLE_ARN = terraform output -raw nodejs_app_secrets_role_arn
-$ECR_REPO = terraform output -raw ecr_repository_url
-cd ..
-
-# Update Helm values with ECR repository URL
-(Get-Content k8s/helm-chart/nodejs-app/values.yaml) -replace 'repository: ""', "repository: $ECR_REPO" | Set-Content k8s/helm-chart/nodejs-app/values.yaml
-
-# Update ArgoCD application manifest with correct ECR URL (2 places)
-(Get-Content k8s/argocd/application.yaml) -replace 'REPLACE_WITH_YOUR_ECR_URL', $ECR_REPO | Set-Content k8s/argocd/application.yaml
-(Get-Content k8s/argocd/application.yaml) -replace '287043460305\.dkr\.ecr\.us-east-1\.amazonaws\.com/nodejs-app', $ECR_REPO | Set-Content k8s/argocd/application.yaml
-```
-
-Linux/Mac:
-```bash
-# Get Terraform outputs
-ROLE_ARN=$(cd terraform && terraform output -raw nodejs_app_secrets_role_arn)
-ECR_REPO=$(cd terraform && terraform output -raw ecr_repository_url)
-
-# Update Helm values with ECR repository URL
-sed -i "s|repository: \"\"|repository: $ECR_REPO|g" k8s/helm-chart/nodejs-app/values.yaml
-
-# Update ArgoCD application manifest with correct ECR URL (2 places)
-sed -i "s|REPLACE_WITH_YOUR_ECR_URL|$ECR_REPO|g" k8s/argocd/application.yaml
-sed -i "s|287043460305\.dkr\.ecr\.us-east-1\.amazonaws\.com/nodejs-app|$ECR_REPO|g" k8s/argocd/application.yaml
-```
-
-**Deploy ArgoCD Application:**
-```bash
-# Deploy the application (namespace will be created automatically)
-kubectl apply -f k8s/argocd/application.yaml
-```
-
-**Annotate Service Account with IAM Role:**
-
-Wait ~30 seconds for ArgoCD to create the namespace and service account, then annotate it:
-
-PowerShell:
-```powershell
-Start-Sleep -Seconds 30
-kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl delete pod --all -n nodejs-app
-```
-
-Linux/Mac:
-```bash
-sleep 30
-kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl delete pod --all -n nodejs-app
-```
-
-**Verify deployment:**
-```bash
-kubectl get application nodejs-app -n argocd  # Should show: Synced, Healthy
-kubectl get pods -n nodejs-app                 # Should show: Running
-```
-
-**Annotate Service Account with IAM Role:**
-
-PowerShell:
-```powershell
-cd terraform; $ROLE_ARN = terraform output -raw nodejs_app_secrets_role_arn; cd ..
-kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl rollout restart deployment nodejs-app -n nodejs-app
-```
-
-Linux/Mac:
-```bash
-ROLE_ARN=$(cd terraform && terraform output -raw nodejs_app_secrets_role_arn)
-kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl rollout restart deployment nodejs-app -n nodejs-app
-```
-
-Verify:
-```bash
-kubectl get pods -n nodejs-app
-kubectl get externalsecret -n nodejs-app
-kubectl get secretstore -n nodejs-app
-```
-
-### Step 7: Install AWS Load Balancer Controller (3 min)
-
-```bash
 helm repo add eks https://aws.github.io/eks-charts
 helm repo update
 helm install aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system --set clusterName=gitops-eks-cluster --set serviceAccount.create=true --set serviceAccount.name=aws-load-balancer-controller
 ```
 
-Annotate service account with IAM role (for ALB management):
+**Annotate service account with IAM role:**
 
-PowerShell:
 ```powershell
-cd terraform; $ROLE_ARN = terraform output -raw aws_lb_controller_role_arn; cd ..
+$ROLE_ARN = (cd terraform; terraform output -raw aws_lb_controller_role_arn)
 kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl rollout restart deployment aws-load-balancer-controller -n kube-system  # Restart to apply IAM role
+kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
 ```
 
-Linux/Mac:
-```bash
-ROLE_ARN=$(cd terraform && terraform output -raw aws_lb_controller_role_arn)
-kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl rollout restart deployment aws-load-balancer-controller -n kube-system  # Restart to apply IAM role
+### Step 7: Deploy Application (3 min)
+
+**Apply ArgoCD Application:**
+
+```powershell
+kubectl apply -f k8s/argocd/application-no-annotations.yaml
 ```
 
-Wait for ALB creation (2-3 min):
-```bash
+**Wait for namespace and service account to be created (~30 seconds):**
+
+```powershell
+Start-Sleep -Seconds 30
+```
+
+**Annotate nodejs-app service account with IAM role:**
+
+```powershell
+$ROLE_ARN = (cd terraform; terraform output -raw nodejs_app_secrets_role_arn)
+kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+```
+
+**Restart External Secrets Operator to pick up the annotation:**
+
+```powershell
+kubectl rollout restart deployment -n external-secrets-system
+```
+
+**Wait for secrets to sync and pods to start:**
+
+```powershell
+Start-Sleep -Seconds 30
+kubectl get pods -n nodejs-app
+kubectl get externalsecret -n nodejs-app
+```
+
+**Verify deployment:**
+
+```powershell
+kubectl get application nodejs-app -n argocd  # Should show: Synced, Healthy
+kubectl get pods -n nodejs-app                 # Should show: Running
+```
+
+### Step 8: Access the Application
+
+**Wait for ALB creation (2-3 min):**
+
+```powershell
 kubectl get ingress -n nodejs-app -w  # Watch for ADDRESS field
 ```
-Wait for ADDRESS. Press Ctrl+C.
 
-Get ALB URL and test:
+Press Ctrl+C when ADDRESS appears.
 
-PowerShell:
+**Get ALB URL and test:**
+
 ```powershell
 $ALB_URL = kubectl get ingress nodejs-app -n nodejs-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 Write-Host "Application URL: http://$ALB_URL"
-curl "http://$ALB_URL/health"  # Test health endpoint
+curl "http://$ALB_URL/health"
 ```
 
-Linux/Mac:
-```bash
-ALB_URL=$(kubectl get ingress nodejs-app -n nodejs-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-echo "Application URL: http://$ALB_URL"
-curl "http://$ALB_URL/health"  # Test health endpoint
-```
+Open http://$ALB_URL in your browser to access the web UI.
 
 ---
 
-## 🧪 Test the Application
+## 🧪 Test the GitOps Pipeline
 
-**Access Web UI:**
-```bash
-kubectl port-forward -n nodejs-app svc/nodejs-app 8082:80
-```
-Open http://localhost:8082
+### Test Image Updater (CR-based v1.0.0)
 
-**Test API:**
-```bash
-curl http://localhost:8082/health
-curl http://localhost:8082/api/items
-curl -X POST http://localhost:8082/api/items -H "Content-Type: application/json" -d '{"name":"Test","description":"Demo"}'
-```
+The Image Updater uses a Custom Resource (CR) instead of annotations:
 
-**Test Pipeline:**
-```bash
-# Edit nodejs-app/src/routes/health.js
-git add nodejs-app/src/routes/health.js
-git commit -m "Test pipeline"
-git push
-kubectl logs -n argocd -l app.kubernetes.io/name=argocd-image-updater -f  # Watch Image Updater detect new image
+```powershell
+# View the ImageUpdater CR
+kubectl get imageupdater -n argocd
+kubectl describe imageupdater nodejs-app-updater -n argocd
+
+# Watch Image Updater logs
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-image-updater -f
 ```
 
-**Test Data Persistence:**
-```bash
-kubectl delete pod -n nodejs-app --all  # Delete all pods
-kubectl get pods -n nodejs-app -w  # Watch new pods start
-# Refresh web UI - data still there (stored in RDS, not in pods)
+**How it works:**
+- Image Updater checks ECR every 2 minutes for new images
+- Uses `alphabetical` strategy to pick the highest build number
+- Ignores tags: `latest`, `v*`
+- Automatically updates the Application spec when a new `build-X` image is found
+- ArgoCD syncs the new image automatically
+
+### Test End-to-End Pipeline
+
+1. Make a code change in `nodejs-app/src/routes/health.js`
+2. Commit and push:
+   ```powershell
+   git add nodejs-app/src/routes/health.js
+   git commit -m "Test pipeline"
+   git push
+   ```
+3. Jenkins builds and pushes image with tag `build-X`
+4. Within 2 minutes, Image Updater detects and updates the Application
+5. ArgoCD syncs the new image
+6. Check deployment:
+   ```powershell
+   kubectl get application nodejs-app -n argocd
+   kubectl describe deployment nodejs-app -n nodejs-app | Select-String "Image:"
+   ```
+
+---
+
+## 🔍 Monitoring & Debugging
+
+### Check Image Updater Status
+
+```powershell
+# View ImageUpdater CR
+kubectl get imageupdater nodejs-app-updater -n argocd -o yaml
+
+# Check logs
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-image-updater --tail=50
+
+# Verify ECR authentication
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-image-updater | Select-String "ecr-login"
+```
+
+### Check Application Status
+
+```powershell
+# Application sync status
+kubectl get application nodejs-app -n argocd
+
+# Current image version
+kubectl describe deployment nodejs-app -n nodejs-app | Select-String "Image:"
+
+# Pod status
+kubectl get pods -n nodejs-app
+
+# External Secrets status
+kubectl get externalsecret -n nodejs-app
+kubectl get secretstore -n nodejs-app
+```
+
+### Check Load Balancer
+
+```powershell
+# Ingress status
+kubectl get ingress -n nodejs-app
+
+# ALB Controller logs
+kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller --tail=50
 ```
 
 ---
 
 ## 🐛 Troubleshooting
 
-**Jenkins ECR 403:**
-PowerShell:
+### Jenkins ECR 403 Error
+
 ```powershell
-cd terraform; $ROLE_ARN = terraform output -raw jenkins_role_arn; cd ..
+$ROLE_ARN = (cd terraform; terraform output -raw jenkins_role_arn)
 kubectl annotate serviceaccount jenkins -n jenkins eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
 kubectl delete pod jenkins-0 -n jenkins
 ```
 
-Linux/Mac:
-```bash
-ROLE_ARN=$(cd terraform && terraform output -raw jenkins_role_arn)
-kubectl annotate serviceaccount jenkins -n jenkins eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
-kubectl delete pod jenkins-0 -n jenkins
-```
+### Image Updater Not Detecting Images
 
-**Pods Stuck (Missing Secrets):**
-```bash
-cd terraform
-terraform apply -var="db_password=YourPassword" -auto-approve
-kubectl delete pod -n nodejs-app --all
-```
-
-**Image Updater Not Working:**
-PowerShell:
 ```powershell
-cd terraform; $ECR_REPO = terraform output -raw ecr_repository_url; cd ..
-$ECR_SERVER = $ECR_REPO -replace '/.*', ''
-$ECR_PASSWORD = aws ecr get-login-password --region us-east-1
-kubectl create secret docker-registry ecr-credentials --docker-server=$ECR_SERVER --docker-username=AWS --docker-password=$ECR_PASSWORD -n argocd --dry-run=client -o yaml | kubectl apply -f -
+# Check if Image Updater pod is running
+kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-image-updater
+
+# Check IAM role annotation
+kubectl get serviceaccount argocd-image-updater -n argocd -o yaml | Select-String "role-arn"
+
+# Re-annotate if needed
+$ROLE_ARN = (cd terraform; terraform output -raw argocd_image_updater_role_arn)
+kubectl annotate serviceaccount argocd-image-updater -n argocd eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+kubectl delete pod -n argocd -l app.kubernetes.io/name=argocd-image-updater
 ```
 
-Linux/Mac:
-```bash
-ECR_REPO=$(cd terraform && terraform output -raw ecr_repository_url)
-ECR_SERVER=$(echo $ECR_REPO | cut -d'/' -f1)
-aws ecr get-login-password --region us-east-1 | kubectl create secret docker-registry ecr-credentials --docker-server=$ECR_SERVER --docker-username=AWS --docker-password=$(aws ecr get-login-password --region us-east-1) -n argocd --dry-run=client -o yaml | kubectl apply -f -
+### External Secrets Not Syncing
+
+```powershell
+# Check SecretStore status
+kubectl get secretstore -n nodejs-app
+kubectl describe secretstore aws-secrets-manager -n nodejs-app
+
+# Check service account annotation
+kubectl get serviceaccount nodejs-app-sa -n nodejs-app -o yaml | Select-String "role-arn"
+
+# Re-annotate if needed
+$ROLE_ARN = (cd terraform; terraform output -raw nodejs_app_secrets_role_arn)
+kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+kubectl rollout restart deployment -n external-secrets-system
+kubectl delete pod --all -n nodejs-app
 ```
 
----
+### Application Stuck in Progressing/Degraded
 
-## 🔒 Optional: Add HTTPS
+```powershell
+# Check application details
+kubectl describe application nodejs-app -n argocd
 
-### Option 1: CloudFront (No Domain Needed)
+# Check pod events
+kubectl get events -n nodejs-app --sort-by='.lastTimestamp'
 
-Add to `terraform/main.tf`:
-```hcl
-resource "aws_cloudfront_distribution" "main" {
-  origin {
-    domain_name = "YOUR_ALB_DNS"
-    origin_id   = "alb"
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "http-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
-  }
-  enabled = true
-  default_cache_behavior {
-    target_origin_id       = "alb"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
-    cached_methods         = ["GET", "HEAD"]
-    forwarded_values {
-      query_string = true
-      headers      = ["Host"]
-      cookies { forward = "all" }
-    }
-    min_ttl     = 0
-    default_ttl = 0
-    max_ttl     = 0
-  }
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
-  restrictions {
-    geo_restriction { restriction_type = "none" }
-  }
-}
-output "cloudfront_domain" {
-  value = aws_cloudfront_distribution.main.domain_name
-}
+# Force sync
+kubectl patch application nodejs-app -n argocd --type merge -p '{"operation":{"initiatedBy":{"username":"admin"},"sync":{"syncStrategy":{"hook":{}}}}}'
 ```
 
-```bash
-cd terraform
-terraform apply -var="db_password=YourPassword" -auto-approve
-terraform output -raw cloudfront_domain
-```
+### Load Balancer Not Creating
 
-### Option 2: ACM Certificate (Requires Domain)
+```powershell
+# Check ALB Controller status
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
 
-```bash
-aws acm request-certificate --domain-name myapp.com --validation-method DNS --region us-east-1
-```
+# Check IAM role
+kubectl get serviceaccount aws-load-balancer-controller -n kube-system -o yaml | Select-String "role-arn"
 
-Edit `k8s/helm-chart/nodejs-app/values.yaml`:
-```yaml
-ingress:
-  certificateArn: "arn:aws:acm:us-east-1:123456789:certificate/abc-123"
-```
-
-```bash
-git add k8s/helm-chart/nodejs-app/values.yaml
-git commit -m "Add HTTPS"
-git push
+# Re-annotate if needed
+$ROLE_ARN = (cd terraform; terraform output -raw aws_lb_controller_role_arn)
+kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
 ```
 
 ---
@@ -469,105 +366,83 @@ git push
 
 **⚠️ Follow this order to avoid stuck VPC deletion!**
 
-```bash
-# 1. Delete ArgoCD app
+### Step 1: Delete Application and Wait for ALB Cleanup
+
+```powershell
 kubectl delete application nodejs-app -n argocd
-kubectl wait --for=delete ingress/nodejs-app -n nodejs-app --timeout=300s
+Start-Sleep -Seconds 60
 ```
 
-**If Ingress stuck:**
-PowerShell:
+### Step 2: Force Delete Ingress if Stuck
+
 ```powershell
 kubectl patch ingress nodejs-app -n nodejs-app -p '{\"metadata\":{\"finalizers\":[]}}' --type=merge
 kubectl delete ingress nodejs-app -n nodejs-app --force --grace-period=0
 ```
 
-Linux/Mac:
-```bash
-kubectl patch ingress nodejs-app -n nodejs-app -p '{"metadata":{"finalizers":[]}}' --type=merge
-kubectl delete ingress nodejs-app -n nodejs-app --force --grace-period=0
-```
+### Step 3: Delete Load Balancers and Security Groups
 
-**Delete ALB & Target Groups (created by LB Controller):**
-
-PowerShell:
 ```powershell
-$ALB_ARN = aws elbv2 describe-load-balancers --region us-east-1 --query 'LoadBalancers[?contains(LoadBalancerName, `k8s-`)].LoadBalancerArn' --output text
-if ($ALB_ARN) { aws elbv2 delete-load-balancer --load-balancer-arn $ALB_ARN }
-$TG_ARN = aws elbv2 describe-target-groups --region us-east-1 --query 'TargetGroups[?contains(TargetGroupName, `k8s-`)].TargetGroupArn' --output text
-if ($TG_ARN) { aws elbv2 delete-target-group --target-group-arn $TG_ARN }
-Start-Sleep -Seconds 30  # Wait for ALB deletion
+# Get VPC ID
+$VPC_ID = (cd terraform; terraform output -raw vpc_id)
+
+# Delete ALBs
+$ALB_ARNS = aws elbv2 describe-load-balancers --region us-east-1 --query 'LoadBalancers[?contains(LoadBalancerName, `k8s-`)].LoadBalancerArn' --output text
+if ($ALB_ARNS) { $ALB_ARNS -split "`t" | ForEach-Object { aws elbv2 delete-load-balancer --load-balancer-arn $_ } }
+
+# Delete Target Groups
+$TG_ARNS = aws elbv2 describe-target-groups --region us-east-1 --query 'TargetGroups[?contains(TargetGroupName, `k8s-`)].TargetGroupArn' --output text
+if ($TG_ARNS) { $TG_ARNS -split "`t" | ForEach-Object { aws elbv2 delete-target-group --target-group-arn $_ } }
+
+Start-Sleep -Seconds 30
+
+# Delete Security Groups created by LB Controller
+$SG_IDS = aws ec2 describe-security-groups --region us-east-1 --filters "Name=vpc-id,Values=$VPC_ID" --query 'SecurityGroups[?contains(GroupName, `k8s-`)].GroupId' --output text
+if ($SG_IDS) { $SG_IDS -split "`t" | ForEach-Object { aws ec2 delete-security-group --group-id $_ 2>&1 } }
 ```
 
-Linux/Mac:
-```bash
-aws elbv2 describe-load-balancers --region us-east-1 --query 'LoadBalancers[?contains(LoadBalancerName, `k8s-`)].LoadBalancerArn' --output text | xargs -I {} aws elbv2 delete-load-balancer --load-balancer-arn {}
-aws elbv2 describe-target-groups --region us-east-1 --query 'TargetGroups[?contains(TargetGroupName, `k8s-`)].TargetGroupArn' --output text | xargs -I {} aws elbv2 delete-target-group --target-group-arn {}
-sleep 30  # Wait for ALB deletion
-```
+### Step 4: Uninstall Helm Charts
 
-**Delete Security Groups (created by LB Controller):**
-
-PowerShell:
 ```powershell
-cd terraform; $VPC_ID = terraform output -raw vpc_id; cd ..
-$SGs = aws ec2 describe-security-groups --region us-east-1 --filters "Name=vpc-id,Values=$VPC_ID" --query 'SecurityGroups[?contains(GroupName, `k8s-`)].GroupId' --output text
-if ($SGs) { $SGs -split "`t" | ForEach-Object { aws ec2 delete-security-group --group-id $_ } }
-```
-
-Linux/Mac:
-```bash
-VPC_ID=$(cd terraform && terraform output -raw vpc_id)
-aws ec2 describe-security-groups --region us-east-1 --filters "Name=vpc-id,Values=$VPC_ID" --query 'SecurityGroups[?contains(GroupName, `k8s-`)].GroupId' --output text | xargs -I {} aws ec2 delete-security-group --group-id {}
-```
-
-**Uninstall Helm & Destroy:**
-```bash
 helm uninstall aws-load-balancer-controller -n kube-system
-helm uninstall jenkins -n jenkins
-helm uninstall argocd -n argocd
 helm uninstall argocd-image-updater -n argocd
+helm uninstall argocd -n argocd
 helm uninstall external-secrets -n external-secrets-system
+helm uninstall jenkins -n jenkins
+```
+
+### Step 5: Destroy Infrastructure
+
+```powershell
 cd terraform
-terraform destroy -var="db_password=YourPassword" -auto-approve
+terraform destroy -var="db_password=YourSecurePassword123!" -auto-approve
 ```
 
-**Why this order?** AWS LB Controller creates ALB, target groups, and security groups outside Terraform. Deleting them first prevents VPC from hanging for 15+ minutes.
-
----
-
-## 🔗 Quick Commands
-
-```bash
-# Check status
-kubectl get pods --all-namespaces
-kubectl get application -n argocd
-kubectl get ingress -n nodejs-app
-
-# View logs
-kubectl logs -n argocd -l app.kubernetes.io/name=argocd-image-updater --tail=20
-kubectl logs -n nodejs-app -l app=nodejs-app --tail=20
-
-# Current image
-kubectl get deployment nodejs-app -n nodejs-app -o jsonpath='{.spec.template.spec.containers[0].image}'
-```
-
----
-
-## 💰 Cost: ~$213/month | Destroy: $0
-
-- EKS: $73 | EC2: $60 | RDS: $15 | Redis: $12 | ALB: $16 | NAT: $32 | Data: $5
+**Why this order?** AWS LB Controller creates ALB, target groups, and security groups outside Terraform. Deleting them first prevents VPC from hanging during destruction.
 
 ---
 
 ## 📁 Project Structure
 
 ```
-├── terraform/          # IaC (VPC, EKS, RDS, Redis, ECR, IAM)
+├── terraform/
+│   ├── modules/
+│   │   ├── vpc/           # VPC, subnets, NAT gateway
+│   │   ├── eks/           # EKS cluster, node groups, OIDC
+│   │   ├── rds/           # MySQL database
+│   │   ├── elasticache/   # Redis cache
+│   │   ├── ecr/           # Container registry
+│   │   └── iam/           # IAM roles for IRSA (NEW!)
+│   ├── main.tf            # Module orchestration (cleaned up!)
+│   ├── variables.tf
+│   └── outputs.tf
 ├── k8s/
-│   ├── helm-chart/     # Helm chart
-│   └── argocd/         # ArgoCD app
-└── nodejs-app/         # Node.js app (Express + MySQL + Redis)
+│   ├── helm-chart/        # Helm chart for nodejs-app
+│   └── argocd/
+│       ├── application-no-annotations.yaml  # ArgoCD Application
+│       ├── imageupdater-cr.yaml            # ImageUpdater CR (v1.0.0)
+│       └── image-updater-values.yaml       # Helm values for Image Updater
+└── nodejs-app/            # Node.js app (Express + MySQL + Redis)
 ```
 
 ---
@@ -575,40 +450,134 @@ kubectl get deployment nodejs-app -n nodejs-app -o jsonpath='{.spec.template.spe
 ## 🔄 Pipeline Flow
 
 ```
-Push → Jenkins → ECR → Image Updater → ArgoCD → EKS → Running!
+Push → Jenkins → ECR → Image Updater CR → ArgoCD → EKS → Running!
 ```
 
 ---
 
----
+## 📝 Key Features
 
-## 📝 Important Notes
+### ArgoCD Image Updater v1.0.0 (CR-based)
 
-### ArgoCD Image Updater Configuration
+This project uses the **new CR-based approach** instead of annotations:
 
-The Image Updater is configured with annotations on the Application (not separate CRs):
-
-```yaml
-annotations:
-  argocd-image-updater.argoproj.io/image-list: nodejs-app=<ECR_URL>
-  argocd-image-updater.argoproj.io/nodejs-app.update-strategy: name
-  argocd-image-updater.argoproj.io/nodejs-app.allow-tags: regexp:^build-[0-9]+$
-```
+**Configuration:**
+- `k8s/argocd/imageupdater-cr.yaml` - ImageUpdater Custom Resource
+- `k8s/argocd/image-updater-values.yaml` - Helm values with IRSA and ECR auth
 
 **How it works:**
-- Checks ECR every 2 minutes for new images
-- Only considers tags matching `build-[0-9]+` (e.g., build-1, build-2, build-3)
-- Uses `name` strategy to pick the highest build number lexically
-- Automatically updates the Application and ArgoCD syncs the new image
+1. ImageUpdater CR watches the `nodejs-app` Application
+2. Checks ECR every 2 minutes for new images
+3. Uses `alphabetical` strategy (lexical sorting)
+4. Only considers tags matching `build-[0-9]+` pattern
+5. Automatically updates Application spec with new image tag
+6. ArgoCD syncs the changes
 
-**To test:**
-1. Make a code change
-2. Push to Git and trigger Jenkins build
-3. Jenkins builds and pushes image with tag `build-X`
-4. Within 2 minutes, Image Updater detects and deploys it
-5. Check logs: `kubectl logs -n argocd -l app.kubernetes.io/name=argocd-image-updater --tail=50`
+**Benefits over annotation-based:**
+- Centralized configuration
+- Better for managing multiple applications
+- Easier to version control
+- More flexible filtering options
+
+### IAM Module
+
+All IAM roles for IRSA are now organized in `terraform/modules/iam/`:
+- Jenkins ECR access
+- ArgoCD Image Updater ECR access
+- External Secrets Operator
+- AWS Load Balancer Controller
+- nodejs-app secrets access
+- EBS CSI Driver
+
+This keeps `main.tf` clean and maintainable.
 
 ---
 
-**Last Updated:** November 13, 2025  
-**Status:** ✅ Complete GitOps pipeline with Image Updater working
+## 🔗 Quick Commands
+
+```powershell
+# Check overall status
+kubectl get pods --all-namespaces
+kubectl get application -n argocd
+kubectl get ingress -n nodejs-app
+
+# View Image Updater logs
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-image-updater --tail=20
+
+# View application logs
+kubectl logs -n nodejs-app -l app=nodejs-app --tail=20
+
+# Current image version
+kubectl describe deployment nodejs-app -n nodejs-app | Select-String "Image:"
+
+# Check ImageUpdater CR
+kubectl get imageupdater -n argocd
+kubectl describe imageupdater nodejs-app-updater -n argocd
+```
+
+---
+
+## 💰 Cost Estimate
+
+**Monthly:** ~$213 | **After Destroy:** $0
+
+- EKS: $73
+- EC2 (nodes): $60
+- RDS: $15
+- Redis: $12
+- ALB: $16
+- NAT Gateway: $32
+- Data Transfer: $5
+
+---
+
+## 📚 Documentation
+
+### Image Updater CR Schema
+
+The ImageUpdater CR follows this structure:
+
+```yaml
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: nodejs-app-updater
+  namespace: argocd
+spec:
+  namespace: argocd  # Where to look for Applications
+  
+  commonUpdateSettings:
+    updateStrategy: alphabetical  # or semver, latest, digest
+    ignoreTags:  # Tags to ignore
+      - "latest"
+      - "v*"
+  
+  writeBackConfig:
+    method: argocd  # or git for GitOps write-back
+  
+  applicationRefs:
+    - namePattern: "nodejs-app"  # Application name pattern
+      images:
+        - alias: nodejs-app
+          imageName: <ECR_URL>:latest
+          manifestTargets:
+            helm:
+              name: image.repository
+              tag: image.tag
+```
+
+### IRSA (IAM Roles for Service Accounts)
+
+All service accounts use IRSA for AWS authentication:
+
+| Service Account | Namespace | IAM Role | Purpose |
+|----------------|-----------|----------|---------|
+| jenkins | jenkins | jenkins-role | Push images to ECR |
+| argocd-image-updater | argocd | argocd-image-updater-role | Read images from ECR |
+| nodejs-app-sa | nodejs-app | nodejs-app-secrets-role | Access Secrets Manager |
+| aws-load-balancer-controller | kube-system | aws-lb-controller-role | Manage ALBs |
+
+---
+
+**Last Updated:** November 14, 2025  
+**Status:** ✅ Complete GitOps pipeline with Image Updater v1.0.0 (CR-based) working

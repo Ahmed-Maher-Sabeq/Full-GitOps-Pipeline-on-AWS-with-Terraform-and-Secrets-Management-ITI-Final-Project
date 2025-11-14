@@ -49,3 +49,8 @@ variable "node_max_size" {
   description = "Maximum number of nodes in EKS node group"
   type        = number
 }
+
+variable "ebs_csi_driver_role_arn" {
+  description = "ARN of the IAM role for EBS CSI Driver"
+  type        = string
+}

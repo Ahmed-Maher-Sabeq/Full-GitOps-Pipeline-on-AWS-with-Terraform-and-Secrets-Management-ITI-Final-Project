@@ -98,7 +98,7 @@ output "configure_kubectl" {
 # Jenkins Outputs
 output "jenkins_role_arn" {
   description = "ARN of the Jenkins IAM role for IRSA"
-  value       = aws_iam_role.jenkins.arn
+  value       = module.iam.jenkins_role_arn
 }
 
 output "jenkins_install_command" {
@@ -109,7 +109,7 @@ output "jenkins_install_command" {
 # EBS CSI Driver Outputs
 output "ebs_csi_driver_role_arn" {
   description = "ARN of the EBS CSI Driver IAM role"
-  value       = module.eks.ebs_csi_driver_role_arn
+  value       = module.iam.ebs_csi_driver_role_arn
 }
 
 output "ebs_csi_driver_installed" {
@@ -120,17 +120,23 @@ output "ebs_csi_driver_installed" {
 # External Secrets Operator Outputs
 output "eso_role_arn" {
   description = "ARN of the External Secrets Operator IAM role for IRSA"
-  value       = aws_iam_role.eso.arn
+  value       = module.iam.eso_role_arn
 }
 
 # nodejs-app IAM Role ARN
 output "nodejs_app_secrets_role_arn" {
   description = "ARN of the IAM role for nodejs-app to access Secrets Manager"
-  value       = module.eks.nodejs_app_secrets_role_arn
+  value       = module.iam.nodejs_app_secrets_role_arn
 }
 
 # AWS Load Balancer Controller Outputs
 output "aws_lb_controller_role_arn" {
   description = "ARN of the AWS Load Balancer Controller IAM role for IRSA"
-  value       = aws_iam_role.aws_load_balancer_controller.arn
+  value       = module.iam.aws_lb_controller_role_arn
+}
+
+# ArgoCD Image Updater Outputs
+output "argocd_image_updater_role_arn" {
+  description = "ARN of the ArgoCD Image Updater IAM role for IRSA"
+  value       = module.iam.argocd_image_updater_role_arn
 }
