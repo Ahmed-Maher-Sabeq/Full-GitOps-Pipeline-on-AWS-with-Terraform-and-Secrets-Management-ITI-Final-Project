@@ -1,0 +1,8 @@
+helm:
+  parameters:
+  - name: image.repository
+    value: 287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
+    forcestring: true
+  - name: image.tag
+    value: build-4
+    forcestring: true
