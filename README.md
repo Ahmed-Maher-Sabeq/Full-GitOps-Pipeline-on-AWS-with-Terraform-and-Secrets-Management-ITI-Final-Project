@@ -36,7 +36,7 @@ This is a fully functional reference implementation that you can deploy to any A
 
 ## Architecture Diagram
 
-![Architecture Diagram](assets/diagram-export-11-16-2025-9_41_19-PM.png)
+![Architecture Diagram](assets/diagram-export-11-16-2025-11_34_16-PM.png)
 
 ---
 
