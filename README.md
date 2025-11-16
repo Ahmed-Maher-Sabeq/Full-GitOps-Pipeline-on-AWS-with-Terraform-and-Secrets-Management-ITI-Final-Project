@@ -4,9 +4,39 @@ Production-ready GitOps pipeline with ArgoCD Image Updater v1.0.0 (CR-based): Te
 
 **Result:** Push code → Auto-deploy in ~5 minutes
 
+---
+
+## 📖 Overview
+
+This project demonstrates a complete, production-ready GitOps CI/CD pipeline on AWS. It automates the entire journey from code commit to production deployment using industry-standard tools and best practices.
+
+**What This Project Does:**
+
+- **Infrastructure as Code**: Provisions a complete AWS environment (VPC, EKS cluster, RDS database, Redis cache, ECR registry) using Terraform
+- **Continuous Integration**: Jenkins automatically builds Docker images from your code and pushes them to Amazon ECR
+- **Continuous Deployment**: ArgoCD monitors your Git repository and automatically deploys changes to Kubernetes
+- **Automated Image Updates**: ArgoCD Image Updater watches ECR for new images and triggers deployments without manual intervention
+- **Secrets Management**: External Secrets Operator securely injects AWS Secrets Manager credentials into your applications
+- **Load Balancing**: AWS Load Balancer Controller automatically provisions Application Load Balancers for ingress traffic
+- **Security**: Uses IAM Roles for Service Accounts (IRSA) for secure, credential-free AWS access from Kubernetes
+
+**The Complete Flow:**
+
+1. Developer pushes code to GitHub
+2. Jenkins detects the change, builds a Docker image, and pushes it to ECR with a `build-X` tag
+3. ArgoCD Image Updater checks ECR every 2 minutes, detects the new image
+4. Image Updater updates the ArgoCD Application spec with the new image tag
+5. ArgoCD syncs the change and deploys the new version to EKS
+6. AWS Load Balancer Controller exposes the application via an Application Load Balancer
+7. Application runs with secrets from AWS Secrets Manager, connected to RDS and Redis
+
+**Time from code push to production: ~5 minutes** ⚡
+
+This is a fully functional reference implementation that you can deploy to any AWS account and adapt for your own applications.
+
 ## Architecture Diagram
 
-![Architecture Diagram](assets/architecture%20diagram.png)
+![Architecture Diagram](assets/architecture_diagram.png)
 
 ---
 
