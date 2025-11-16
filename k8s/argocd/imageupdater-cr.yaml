@@ -14,7 +14,7 @@ spec:
       - "latest"
       - "v*"
   
-  # Write-back configuration
+  # Write-back configuration - ECR only (no Git commits)
   writeBackConfig:
     method: argocd
   
