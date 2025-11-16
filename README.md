@@ -4,6 +4,10 @@ Production-ready GitOps pipeline with ArgoCD Image Updater v1.0.0 (CR-based): Te
 
 **Result:** Push code → Auto-deploy in ~5 minutes
 
+## Architecture Diagram
+
+![Architecture Diagram](assets/architecture%20diagram.png)
+
 ---
 
 ## ⚠️ Important: Dynamic Configuration
@@ -45,7 +49,7 @@ helm install jenkins jenkins/jenkins --namespace jenkins --create-namespace --va
 **Annotate Jenkins service account with IAM role:**
 
 ```powershell
-$ROLE_ARN = (cd terraform; terraform output -raw jenkins_role_arn)
+Push-Location terraform; $ROLE_ARN = terraform output -raw jenkins_role_arn; Pop-Location
 kubectl annotate serviceaccount jenkins -n jenkins eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
 kubectl delete pod jenkins-0 -n jenkins
 ```
@@ -104,7 +108,7 @@ helm install argocd-image-updater argo/argocd-image-updater --namespace argocd -
 **Annotate service account with IAM role:**
 
 ```powershell
-$ROLE_ARN = (cd terraform; terraform output -raw argocd_image_updater_role_arn)
+Push-Location terraform; $ROLE_ARN = terraform output -raw argocd_image_updater_role_arn; Pop-Location
 kubectl annotate serviceaccount argocd-image-updater -n argocd eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
 kubectl delete pod -n argocd -l app.kubernetes.io/name=argocd-image-updater
 ```
@@ -135,7 +139,7 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller -n ku
 **Annotate service account with IAM role:**
 
 ```powershell
-$ROLE_ARN = (cd terraform; terraform output -raw aws_lb_controller_role_arn)
+Push-Location terraform; $ROLE_ARN = terraform output -raw aws_lb_controller_role_arn; Pop-Location
 kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
 kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
 ```
@@ -157,7 +161,7 @@ Start-Sleep -Seconds 30
 **Annotate nodejs-app service account with IAM role:**
 
 ```powershell
-$ROLE_ARN = (cd terraform; terraform output -raw nodejs_app_secrets_role_arn)
+Push-Location terraform; $ROLE_ARN = terraform output -raw nodejs_app_secrets_role_arn; Pop-Location
 kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
 ```
 
@@ -579,5 +583,59 @@ All service accounts use IRSA for AWS authentication:
 
 ---
 
-**Last Updated:** November 14, 2025  
+---
+
+## 📊 Results
+
+### Terraform Resources
+
+Infrastructure provisioned with Terraform:
+
+![Terraform Resources 1](assets/terraform_resources/Screenshot%20(707).png)
+![Terraform Resources 2](assets/terraform_resources/Screenshot%20(734).png)
+![Terraform Resources 3](assets/terraform_resources/Screenshot%20(735).png)
+![Terraform Resources 4](assets/terraform_resources/Screenshot%20(736).png)
+![Terraform Resources 5](assets/terraform_resources/Screenshot%20(737).png)
+![Terraform Resources 6](assets/terraform_resources/Screenshot%20(738).png)
+![Terraform Resources 7](assets/terraform_resources/Screenshot%20(739).png)
+![Terraform Resources 8](assets/terraform_resources/Screenshot%20(740).png)
+![Terraform Resources 9](assets/terraform_resources/Screenshot%20(743).png)
+
+### Installing and Configuring Jenkins and Running the Pipeline
+
+Jenkins setup and pipeline execution:
+
+![Jenkins Setup 1](assets/installing_and_configuring_jenkins_and_running_the_pipeline/Screenshot%20(731).png)
+![Jenkins Setup 2](assets/installing_and_configuring_jenkins_and_running_the_pipeline/Screenshot%20(732).png)
+![Jenkins Setup 3](assets/installing_and_configuring_jenkins_and_running_the_pipeline/Screenshot%20(733).png)
+![Jenkins Setup 4](assets/installing_and_configuring_jenkins_and_running_the_pipeline/Screenshot%20(741).png)
+![Jenkins Setup 5](assets/installing_and_configuring_jenkins_and_running_the_pipeline/Screenshot%20(742).png)
+
+### Installing ArgoCD, Argo Image Updater, External Secrets, AWS Load Balancer Controller and Deploying the App
+
+Complete deployment of all components:
+
+![Deployment 1](assets/installing_argocd,argo_image_updater,external_secrets,aws_load_balancer_controller_and_deploying_the_app/Screenshot%20(744).png)
+![Deployment 2](assets/installing_argocd,argo_image_updater,external_secrets,aws_load_balancer_controller_and_deploying_the_app/Screenshot%20(747).png)
+![Deployment 3](assets/installing_argocd,argo_image_updater,external_secrets,aws_load_balancer_controller_and_deploying_the_app/Screenshot%20(748).png)
+![Deployment 4](assets/installing_argocd,argo_image_updater,external_secrets,aws_load_balancer_controller_and_deploying_the_app/Screenshot%20(749).png)
+![Deployment 5](assets/installing_argocd,argo_image_updater,external_secrets,aws_load_balancer_controller_and_deploying_the_app/Screenshot%20(750).png)
+![Deployment 6](assets/installing_argocd,argo_image_updater,external_secrets,aws_load_balancer_controller_and_deploying_the_app/Screenshot%20(751).png)
+![Deployment 7](assets/installing_argocd,argo_image_updater,external_secrets,aws_load_balancer_controller_and_deploying_the_app/Screenshot%20(752).png)
+![Deployment 8](assets/installing_argocd,argo_image_updater,external_secrets,aws_load_balancer_controller_and_deploying_the_app/Screenshot%20(753).png)
+![Deployment 9](assets/installing_argocd,argo_image_updater,external_secrets,aws_load_balancer_controller_and_deploying_the_app/Screenshot%20(754).png)
+
+### Testing the Argo Image Updater
+
+Image Updater in action:
+
+![Image Updater Test 1](assets/testing_the_argo_image_updater/Screenshot%20(755).png)
+![Image Updater Test 2](assets/testing_the_argo_image_updater/Screenshot%20(756).png)
+![Image Updater Test 3](assets/testing_the_argo_image_updater/Screenshot%20(757).png)
+![Image Updater Test 4](assets/testing_the_argo_image_updater/Screenshot%20(758).png)
+![Image Updater Test 5](assets/testing_the_argo_image_updater/Screenshot%20(759).png)
+
+---
+
+**Last Updated:** November 16, 2025  
 **Status:** ✅ Complete GitOps pipeline with Image Updater v1.0.0 (CR-based) working
