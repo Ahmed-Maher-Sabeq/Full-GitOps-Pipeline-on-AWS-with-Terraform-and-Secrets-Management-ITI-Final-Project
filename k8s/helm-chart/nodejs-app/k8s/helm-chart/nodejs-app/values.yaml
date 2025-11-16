@@ -4,5 +4,5 @@ helm:
     value: 287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
     forcestring: true
   - name: image.tag
-    value: build-4
+    value: build-5
     forcestring: true
