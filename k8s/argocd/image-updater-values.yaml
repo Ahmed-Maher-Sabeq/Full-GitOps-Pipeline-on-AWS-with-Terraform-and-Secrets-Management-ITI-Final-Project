@@ -5,8 +5,8 @@ serviceAccount:
 config:
   registries:
     - name: ecr
-      api_url: https://287043460305.dkr.ecr.us-east-1.amazonaws.com
-      prefix: 287043460305.dkr.ecr.us-east-1.amazonaws.com
+      api_url: https://579385932895.dkr.ecr.us-east-1.amazonaws.com
+      prefix: 579385932895.dkr.ecr.us-east-1.amazonaws.com
       credentials: ext:/scripts/ecr-login.sh
       default: true
 

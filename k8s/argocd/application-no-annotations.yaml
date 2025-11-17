@@ -8,12 +8,12 @@ spec:
   
   source:
     repoURL: https://github.com/Ahmed-Maher-Sabeq/Full-GitOps-Pipeline-on-AWS-with-Terraform-and-Secrets-Management-ITI-Final-Project.git
-    targetRevision: main
+    targetRevision: abdelaziz
     path: k8s/helm-chart/nodejs-app
     helm:
       parameters:
       - name: image.repository
-        value: 287043460305.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
+        value: 579385932895.dkr.ecr.us-east-1.amazonaws.com/nodejs-app
       - name: image.tag
         value: latest
   
