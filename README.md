@@ -60,7 +60,7 @@ This project is designed to work with **any AWS account**. All AWS account IDs a
 
 ### Step 1: Deploy Infrastructure (15 min)
 
-```powershell
+```bash
 cd terraform
 terraform init
 terraform apply -var="db_password=YourSecurePassword123!" -auto-approve
@@ -70,7 +70,7 @@ kubectl get nodes
 
 ### Step 2: Install Jenkins (3 min)
 
-```powershell
+```bash
 helm repo add jenkins https://charts.jenkins.io
 helm repo update
 helm install jenkins jenkins/jenkins --namespace jenkins --create-namespace --values terraform/jenkins-helm-values.yaml
@@ -78,6 +78,14 @@ helm install jenkins jenkins/jenkins --namespace jenkins --create-namespace --va
 
 **Annotate Jenkins service account with IAM role:**
 
+**Linux/Mac:**
+```bash
+ROLE_ARN=$(cd terraform && terraform output -raw jenkins_role_arn)
+kubectl annotate serviceaccount jenkins -n jenkins eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+kubectl delete pod jenkins-0 -n jenkins
+```
+
+**Windows PowerShell:**
 ```powershell
 Push-Location terraform; $ROLE_ARN = terraform output -raw jenkins_role_arn; Pop-Location
 kubectl annotate serviceaccount jenkins -n jenkins eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
@@ -86,7 +94,7 @@ kubectl delete pod jenkins-0 -n jenkins
 
 **Access Jenkins:**
 
-```powershell
+```bash
 # Get admin password
 kubectl exec -n jenkins -it svc/jenkins -c jenkins -- /bin/cat /run/secrets/additional/chart-admin-password
 
@@ -106,7 +114,7 @@ Open http://localhost:8080 and login with admin / password-from-above
 
 ### Step 3: Install ArgoCD (3 min)
 
-```powershell
+```bash
 helm repo add argo https://argoproj.github.io/argo-helm
 helm repo update
 helm install argocd argo/argo-cd --namespace argocd --create-namespace --version 7.7.12
@@ -115,13 +123,19 @@ kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -
 
 **Get ArgoCD admin password:**
 
+**Linux/Mac:**
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+```
+
+**Windows PowerShell:**
 ```powershell
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($_)) }
 ```
 
 **Port forward (run in separate terminal):**
 
-```powershell
+```bash
 kubectl port-forward svc/argocd-server -n argocd 8081:443
 ```
 
@@ -131,12 +145,20 @@ Open https://localhost:8081 (admin / password-from-above)
 
 **Install Image Updater with CR-based configuration:**
 
-```powershell
+```bash
 helm install argocd-image-updater argo/argocd-image-updater --namespace argocd --version 1.0.0 -f k8s/argocd/image-updater-values.yaml
 ```
 
 **Annotate service account with IAM role:**
 
+**Linux/Mac:**
+```bash
+ROLE_ARN=$(cd terraform && terraform output -raw argocd_image_updater_role_arn)
+kubectl annotate serviceaccount argocd-image-updater -n argocd eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+kubectl delete pod -n argocd -l app.kubernetes.io/name=argocd-image-updater
+```
+
+**Windows PowerShell:**
 ```powershell
 Push-Location terraform; $ROLE_ARN = terraform output -raw argocd_image_updater_role_arn; Pop-Location
 kubectl annotate serviceaccount argocd-image-updater -n argocd eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
@@ -145,13 +167,13 @@ kubectl delete pod -n argocd -l app.kubernetes.io/name=argocd-image-updater
 
 **Apply ImageUpdater Custom Resource:**
 
-```powershell
+```bash
 kubectl apply -f k8s/argocd/imageupdater-cr.yaml
 ```
 
 ### Step 5: Install External Secrets Operator (2 min)
 
-```powershell
+```bash
 helm repo add external-secrets https://charts.external-secrets.io
 helm repo update
 helm install external-secrets external-secrets/external-secrets --namespace external-secrets-system --create-namespace
@@ -160,7 +182,7 @@ kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=external-secret
 
 ### Step 6: Install AWS Load Balancer Controller (3 min)
 
-```powershell
+```bash
 helm repo add eks https://aws.github.io/eks-charts
 helm repo update
 helm install aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system --set clusterName=gitops-eks-cluster --set serviceAccount.create=true --set serviceAccount.name=aws-load-balancer-controller
@@ -168,6 +190,14 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller -n ku
 
 **Annotate service account with IAM role:**
 
+**Linux/Mac:**
+```bash
+ROLE_ARN=$(cd terraform && terraform output -raw aws_lb_controller_role_arn)
+kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
+```
+
+**Windows PowerShell:**
 ```powershell
 Push-Location terraform; $ROLE_ARN = terraform output -raw aws_lb_controller_role_arn; Pop-Location
 kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
@@ -178,18 +208,31 @@ kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
 
 **Apply ArgoCD Application:**
 
-```powershell
+```bash
 kubectl apply -f k8s/argocd/application-no-annotations.yaml
 ```
 
 **Wait for namespace and service account to be created (~30 seconds):**
 
+**Linux/Mac:**
+```bash
+sleep 30
+```
+
+**Windows PowerShell:**
 ```powershell
 Start-Sleep -Seconds 30
 ```
 
 **Annotate nodejs-app service account with IAM role:**
 
+**Linux/Mac:**
+```bash
+ROLE_ARN=$(cd terraform && terraform output -raw nodejs_app_secrets_role_arn)
+kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
+```
+
+**Windows PowerShell:**
 ```powershell
 Push-Location terraform; $ROLE_ARN = terraform output -raw nodejs_app_secrets_role_arn; Pop-Location
 kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/role-arn=$ROLE_ARN --overwrite
@@ -197,12 +240,20 @@ kubectl annotate serviceaccount nodejs-app-sa -n nodejs-app eks.amazonaws.com/ro
 
 **Restart External Secrets Operator to pick up the annotation:**
 
-```powershell
+```bash
 kubectl rollout restart deployment -n external-secrets-system
 ```
 
 **Wait for secrets to sync and pods to start:**
 
+**Linux/Mac:**
+```bash
+sleep 30
+kubectl get pods -n nodejs-app
+kubectl get externalsecret -n nodejs-app
+```
+
+**Windows PowerShell:**
 ```powershell
 Start-Sleep -Seconds 30
 kubectl get pods -n nodejs-app
@@ -211,7 +262,7 @@ kubectl get externalsecret -n nodejs-app
 
 **Verify deployment:**
 
-```powershell
+```bash
 kubectl get application nodejs-app -n argocd  # Should show: Synced, Healthy
 kubectl get pods -n nodejs-app                 # Should show: Running
 ```
@@ -220,7 +271,7 @@ kubectl get pods -n nodejs-app                 # Should show: Running
 
 **Wait for ALB creation (2-3 min):**
 
-```powershell
+```bash
 kubectl get ingress -n nodejs-app -w  # Watch for ADDRESS field
 ```
 
@@ -228,6 +279,14 @@ Press Ctrl+C when ADDRESS appears.
 
 **Get ALB URL and test:**
 
+**Linux/Mac:**
+```bash
+ALB_URL=$(kubectl get ingress nodejs-app -n nodejs-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "Application URL: http://$ALB_URL"
+curl "http://$ALB_URL/health"
+```
+
+**Windows PowerShell:**
 ```powershell
 $ALB_URL = kubectl get ingress nodejs-app -n nodejs-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 Write-Host "Application URL: http://$ALB_URL"
@@ -244,7 +303,7 @@ Open http://$ALB_URL in your browser to access the web UI.
 
 The Image Updater uses a Custom Resource (CR) instead of annotations:
 
-```powershell
+```bash
 # View the ImageUpdater CR
 kubectl get imageupdater -n argocd
 kubectl describe imageupdater nodejs-app-updater -n argocd
@@ -402,6 +461,13 @@ kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
 
 ### Step 1: Delete Application and Wait for ALB Cleanup
 
+**Linux/Mac:**
+```bash
+kubectl delete application nodejs-app -n argocd
+sleep 60
+```
+
+**Windows PowerShell:**
 ```powershell
 kubectl delete application nodejs-app -n argocd
 Start-Sleep -Seconds 60
@@ -409,13 +475,34 @@ Start-Sleep -Seconds 60
 
 ### Step 2: Force Delete Ingress if Stuck
 
-```powershell
-kubectl patch ingress nodejs-app -n nodejs-app -p '{\"metadata\":{\"finalizers\":[]}}' --type=merge
+```bash
+kubectl patch ingress nodejs-app -n nodejs-app -p '{"metadata":{"finalizers":[]}}' --type=merge
 kubectl delete ingress nodejs-app -n nodejs-app --force --grace-period=0
 ```
 
 ### Step 3: Delete Load Balancers and Security Groups
 
+**Linux/Mac:**
+```bash
+# Get VPC ID
+VPC_ID=$(cd terraform && terraform output -raw vpc_id)
+
+# Delete ALBs
+ALB_ARNS=$(aws elbv2 describe-load-balancers --region us-east-1 --query 'LoadBalancers[?contains(LoadBalancerName, `k8s-`)].LoadBalancerArn' --output text)
+for arn in $ALB_ARNS; do aws elbv2 delete-load-balancer --load-balancer-arn $arn; done
+
+# Delete Target Groups
+TG_ARNS=$(aws elbv2 describe-target-groups --region us-east-1 --query 'TargetGroups[?contains(TargetGroupName, `k8s-`)].TargetGroupArn' --output text)
+for arn in $TG_ARNS; do aws elbv2 delete-target-group --target-group-arn $arn; done
+
+sleep 30
+
+# Delete Security Groups created by LB Controller
+SG_IDS=$(aws ec2 describe-security-groups --region us-east-1 --filters "Name=vpc-id,Values=$VPC_ID" --query 'SecurityGroups[?contains(GroupName, `k8s-`)].GroupId' --output text)
+for sg in $SG_IDS; do aws ec2 delete-security-group --group-id $sg 2>&1 || true; done
+```
+
+**Windows PowerShell:**
 ```powershell
 # Get VPC ID
 $VPC_ID = (cd terraform; terraform output -raw vpc_id)
@@ -437,7 +524,7 @@ if ($SG_IDS) { $SG_IDS -split "`t" | ForEach-Object { aws ec2 delete-security-gr
 
 ### Step 4: Uninstall Helm Charts
 
-```powershell
+```bash
 helm uninstall aws-load-balancer-controller -n kube-system
 helm uninstall argocd-image-updater -n argocd
 helm uninstall argocd -n argocd
@@ -447,7 +534,7 @@ helm uninstall jenkins -n jenkins
 
 ### Step 5: Destroy Infrastructure
 
-```powershell
+```bash
 cd terraform
 terraform destroy -var="db_password=YourSecurePassword123!" -auto-approve
 ```
