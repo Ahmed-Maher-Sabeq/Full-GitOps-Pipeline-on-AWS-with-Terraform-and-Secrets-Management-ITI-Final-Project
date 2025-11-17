@@ -9,7 +9,8 @@ spec:
   
   # Global update settings
   commonUpdateSettings:
-    updateStrategy: alphabetical
+    updateStrategy: semver
+    allowTags: regexp:^build-[0-9]+$
   
   # Write-back configuration - ECR only (no Git commits)
   writeBackConfig:
