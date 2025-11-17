@@ -10,9 +10,6 @@ spec:
   # Global update settings
   commonUpdateSettings:
     updateStrategy: alphabetical
-    ignoreTags:
-      - "latest"
-      - "v*"
   
   # Write-back configuration - ECR only (no Git commits)
   writeBackConfig:
