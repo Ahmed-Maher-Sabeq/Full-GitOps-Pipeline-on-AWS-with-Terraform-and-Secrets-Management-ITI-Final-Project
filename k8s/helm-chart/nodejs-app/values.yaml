@@ -6,3 +6,7 @@ helm:
   - name: image.tag
     value: build-5
     forcestring: true
+serviceAccount:
+  create: true
+  name: nodejs-app
+
